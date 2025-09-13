@@ -1,0 +1,18 @@
+version: 1
+disable_existing_loggers: false
+formatters:
+  json:
+    format: '%(message)s'
+handlers:
+  console:
+    class: logging.StreamHandler
+    formatter: json
+loggers:
+  clinical_platform:
+    level: INFO
+    handlers: [console]
+    propagate: no
+root:
+  level: INFO
+  handlers: [console]
+

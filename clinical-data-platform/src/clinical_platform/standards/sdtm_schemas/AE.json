@@ -1,0 +1,16 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "AE",
+  "type": "object",
+  "properties": {
+    "STUDYID": {"type": "string"},
+    "SUBJID": {"type": "string"},
+    "AESTDTC": {"type": ["string", "null"]},
+    "AEENDTC": {"type": ["string", "null"]},
+    "AESEV": {"type": ["string", "null"]},
+    "AESER": {"type": ["boolean", "null"]},
+    "AEOUT": {"type": ["string", "null"]}
+  },
+  "required": ["STUDYID", "SUBJID"]
+}
+
