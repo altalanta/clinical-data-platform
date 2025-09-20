@@ -1,0 +1,1 @@
+select patient_id, sex, age from "demo"."main"."stg_patients"

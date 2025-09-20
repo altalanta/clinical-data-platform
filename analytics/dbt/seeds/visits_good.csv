@@ -1,0 +1,4 @@
+visit_id,patient_id,provider_id,cost
+100,1,10,120.5
+101,2,11,460.0
+102,3,10,75.0

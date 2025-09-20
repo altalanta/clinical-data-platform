@@ -1,0 +1,10 @@
+name: clinical_data_platform_demo
+version: 1.0.0
+profile: clinical_data_platform_duckdb
+model-paths: ["models"]
+seed-paths: ["seeds"]
+target-path: "target"
+clean-targets: ["target"]
+models:
+  clinical_data_platform_demo:
+    +materialized: table

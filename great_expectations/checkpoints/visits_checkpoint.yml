@@ -1,0 +1,7 @@
+name: visits_checkpoint
+config_version: 1.0
+class_name: Checkpoint
+runtime_config: {}
+validations:
+  - batch_request: {}
+    expectation_suite_name: visits_suite
