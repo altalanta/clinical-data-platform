@@ -1,0 +1,11 @@
+
+    
+    
+    truncate table "demo"."main"."providers";
+    -- dbt seed --
+    
+          COPY "demo"."main"."providers" FROM '/Users/artemisfolle/Documents/Coding_Projects/clinical-data-platform/analytics/dbt/seeds/providers.csv' (FORMAT CSV, HEADER TRUE, DELIMITER ',')
+        
+
+;
+  

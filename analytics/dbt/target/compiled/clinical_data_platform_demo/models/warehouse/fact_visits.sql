@@ -1,0 +1,1 @@
+select v.visit_id, v.patient_id, v.provider_id, v.cost from "demo"."main"."stg_visits" v

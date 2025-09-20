@@ -1,0 +1,1 @@
+select provider_id, specialty from "demo"."main"."stg_providers"

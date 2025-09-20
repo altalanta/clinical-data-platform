@@ -1,0 +1,7 @@
+clinical_data_platform_duckdb:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: "{{ env_var('CDP_DUCKDB_PATH', 'data/demo.duckdb') }}"
+      threads: 4
