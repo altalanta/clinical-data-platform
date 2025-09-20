@@ -1,17 +1,5 @@
 # Clinical Data Platform
 
-[![CI](https://github.com/altalanta/clinical-data-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/altalanta/clinical-data-platform/actions/workflows/ci.yml)
-[![CodeQL](https://github.com/altalanta/clinical-data-platform/actions/workflows/codeql.yml/badge.svg)](https://github.com/altalanta/clinical-data-platform/actions/workflows/codeql.yml)
-[![Docker](https://github.com/altalanta/clinical-data-platform/actions/workflows/docker.yml/badge.svg)](https://github.com/altalanta/clinical-data-platform/actions/workflows/docker.yml)
-[![codecov](https://codecov.io/gh/altalanta/clinical-data-platform/graph/badge.svg?token=)](https://codecov.io/gh/altalanta/clinical-data-platform)
-[![Docs](https://img.shields.io/badge/docs-mkdocs--material-blue)](https://altalanta.github.io/clinical-data-platform/)
-
-Local-first clinical data platform: ingest → transform (dbt/DuckDB) → validate → ML → API/UI.
-
-- **Docs:** https://altalanta.github.io/clinical-data-platform/
-- **Container:** `ghcr.io/altalanta/clinical-data-platform`
-- **Pre-commit:** `pip install pre-commit && pre-commit install`
-
 Production-quality sample project demonstrating an end-to-end clinical data platform: ingest → validate/standardize (SDTM-like) → warehouse (star schema) → dbt transforms → analytics + ML → dashboard + API. Cloud-ready (AWS-first) while runnable locally without external credentials using DuckDB + MinIO + local MLflow.
 
 - Language: Python 3.11
@@ -85,3 +73,4 @@ Everything runs locally by default; no external credentials required. To switch 
 ## License
 
 MIT
+

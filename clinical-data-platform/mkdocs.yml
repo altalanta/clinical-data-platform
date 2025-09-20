@@ -1,26 +1,13 @@
 site_name: Clinical Data Platform
+site_url: https://altalanta.github.io/clinical-data-platform/
+repo_url: https://github.com/altalanta/clinical-data-platform
 theme:
   name: material
-  features:
-    - navigation.tabs
-    - content.code.copy
-plugins:
-  - search
-  - mermaid2
+nav:
+  - Home: index.md
+  - Getting Started: getting-started.md
+  - Architecture: architecture.md
 markdown_extensions:
   - admonition
   - toc:
       permalink: true
-nav:
-  - Home: docs/index.md
-  - Architecture: docs/architecture.md
-  - Data Model: docs/data_model.md
-  - ML: docs/ml.md
-  - Compliance: docs/compliance.md
-  - ADRs:
-      - docs/adr/ADR-000-duckdb.md
-      - docs/adr/ADR-001-dbt.md
-      - docs/adr/ADR-002-streamlit.md
-      - docs/adr/ADR-003-mlflow.md
-      - docs/adr/ADR-004-masking.md
-

@@ -1,0 +1,19 @@
+name: 'clinical_dbt'
+version: '1.0.0'
+config-version: 2
+
+profile: 'clinical_dbt'
+
+model-paths: ['models']
+seed-paths: ['seeds']
+macro-paths: ['macros']
+test-paths: ['tests']
+
+models:
+  clinical_dbt:
+    +materialized: table
+    staging:
+      +schema: staging
+    marts:
+      +schema: marts
+
