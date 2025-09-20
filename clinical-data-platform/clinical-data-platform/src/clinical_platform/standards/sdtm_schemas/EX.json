@@ -1,0 +1,15 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "EX",
+  "type": "object",
+  "properties": {
+    "STUDYID": {"type": "string"},
+    "SUBJID": {"type": "string"},
+    "EXTRT": {"type": ["string", "null"]},
+    "EXDOSE": {"type": ["number", "null"]},
+    "EXSTDTC": {"type": ["string", "null"]},
+    "EXENDTC": {"type": ["string", "null"]}
+  },
+  "required": ["STUDYID", "SUBJID"]
+}
+

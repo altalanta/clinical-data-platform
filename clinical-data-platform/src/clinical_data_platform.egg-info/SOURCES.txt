@@ -1,0 +1,9 @@
+README.md
+pyproject.toml
+src/clinical_data_platform/__init__.py
+src/clinical_data_platform.egg-info/PKG-INFO
+src/clinical_data_platform.egg-info/SOURCES.txt
+src/clinical_data_platform.egg-info/dependency_links.txt
+src/clinical_data_platform.egg-info/requires.txt
+src/clinical_data_platform.egg-info/top_level.txt
+tests/test_smoke.py
