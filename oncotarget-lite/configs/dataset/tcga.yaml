@@ -1,0 +1,44 @@
+# @package dataset
+
+# TCGA dataset configuration
+name: "tcga"
+version: "2023"
+
+# Data sources and paths
+data_sources:
+  expression: "data/tcga/TCGA_expression_matrix.csv"
+  clinical: "data/tcga/TCGA_clinical_data.csv"
+  subtype_labels: "data/tcga/TCGA_subtype_labels.csv"
+  gene_sets: "data/gene_sets/msigdb_hallmark.gmt"
+
+# Target definition
+target:
+  # Example: BRCA PAM50 subtype classification
+  type: "subtype_classification"
+  cancer_type: "BRCA"
+  label_column: "PAM50_subtype"
+  positive_class: "Basal"  # vs other subtypes
+  
+# Grouping and stratification
+grouping:
+  key: "patient_id"  # Patient identifier (no cross-contamination)
+  tissue_key: "cancer_type"
+  batch_key: "tissue_source_site"  # TSS code for batch effects
+
+# Data filtering
+filters:
+  min_samples_per_type: 20
+  max_missing_fraction: 0.05
+  variance_threshold: 0.01
+  cancer_types: ["BRCA", "LUAD", "COAD"]  # Focus on specific types
+
+# URLs for downloading (GDC API endpoints)
+download_endpoints:
+  expression: "https://api.gdc.cancer.gov/data"
+  clinical: "https://api.gdc.cancer.gov/cases"
+  
+# Licensing and citation
+license: "Open Access - no restrictions"
+citation: >
+  The Cancer Genome Atlas Research Network. The Cancer Genome Atlas Pan-Cancer 
+  analysis project. Nature Genetics 45, 1113-1120 (2013). DOI: 10.1038/ng.2764

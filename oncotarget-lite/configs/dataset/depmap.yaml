@@ -1,0 +1,43 @@
+# @package dataset
+
+# DepMap dataset configuration
+name: "depmap"
+version: "23Q2"  # DepMap quarterly release
+
+# Data sources and paths
+data_sources:
+  expression: "data/depmap/OmicsExpressionProteinCodingGenesTPMLogp1.csv"
+  gene_effect: "data/depmap/CRISPRGeneEffect.csv"
+  sample_info: "data/depmap/Model.csv"
+  gene_sets: "data/gene_sets/msigdb_hallmark.gmt"
+
+# Target definition
+target:
+  # Use dependency/essentiality from CRISPR screens
+  type: "gene_dependency"
+  gene_name: "TP53"  # Example target gene
+  threshold: -0.5  # CERES score threshold for essentiality
+  
+# Grouping and stratification
+grouping:
+  key: "ModelID"  # Cell line identifier (no cross-contamination)
+  tissue_key: "OncotreePrimaryDisease"
+  batch_key: "DepmapModelType"  # Sequencing platform/batch
+
+# Data filtering
+filters:
+  min_samples_per_tissue: 10
+  max_missing_fraction: 0.1
+  variance_threshold: 0.01
+
+# URLs for downloading (if redistribution allowed)
+download_urls:
+  expression: "https://ndownloader.figshare.com/files/41385758"
+  gene_effect: "https://ndownloader.figshare.com/files/41385755"
+  sample_info: "https://ndownloader.figshare.com/files/41385761"
+
+# Licensing and citation
+license: "CC-BY-4.0"
+citation: >
+  Ghandi et al. Next-generation characterization of the Cancer Dependency Map. 
+  Nature Communications 10, 4307 (2019). DOI: 10.1038/s41467-019-11808-z

@@ -1,0 +1,60 @@
+# @package prep
+
+# Preprocessing configuration
+name: "base"
+
+# Feature filtering
+filtering:
+  # Remove low-variance features
+  variance_threshold: 0.01
+  # Remove features with too many zeros
+  zero_threshold: 0.9
+  # Remove highly correlated features
+  correlation_threshold: 0.95
+
+# Normalization
+normalization:
+  # Apply log1p transformation
+  log1p: true
+  # Z-score standardization (applied after train/test split)
+  zscore: true
+  # Alternative: CPM (counts per million) normalization
+  cpm: false
+  # Alternative: TPM (transcripts per million) - for RNA-seq
+  tpm: false
+
+# Batch correction
+batch_correction:
+  # Enable batch correction
+  enabled: true
+  # Method: combat_seq (for RNA-seq counts) or ruvg (Remove Unwanted Variation)
+  method: "combat_seq"  # Options: combat_seq, ruvg, none
+  # Parameters for ComBat-seq
+  combat_seq:
+    batch_col: "batch"
+    group_col: "group"
+    covar_cols: null
+  # Parameters for RUVg
+  ruvg:
+    k: 5  # Number of factors to remove
+    control_genes: null  # If null, use negative controls
+
+# Feature engineering
+feature_engineering:
+  # Create pathway-level features
+  pathway_features: true
+  # Method for pathway aggregation
+  pathway_method: "mean"  # Options: mean, gsva, ssgsea
+  # Gene sets to use
+  gene_sets_file: "data/gene_sets/msigdb_hallmark.gmt"
+
+# Data splitting
+splitting:
+  # Cross-validation strategy
+  cv_strategy: "group_stratified"  # Respect grouping variable
+  outer_folds: 5
+  inner_folds: 3
+  # Stratification
+  stratify: true
+  # Random state for reproducibility
+  random_state: 42

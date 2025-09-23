@@ -1,0 +1,150 @@
+stages:
+  ingest_raw:
+    cmd: python -m clinical_data_platform.ingestion.ingest --source synthetic --target raw
+    deps:
+    - scripts/generate_synthetic_data.py
+    - clinical_data_platform/ingestion/
+    outs:
+    - data/raw/patients.parquet
+    - data/raw/visits.parquet
+    - data/raw/lab_results.parquet
+    - data/raw/medications.parquet
+    metrics:
+    - metrics/ingestion.json
+    
+  validate_raw:
+    cmd: python -m clinical_data_platform.validation.validate --data-path data/raw
+    deps:
+    - data/raw/
+    - clinical_data_platform/validation/
+    - great_expectations/expectations/
+    outs:
+    - data/validation/raw_validation_report.json
+    metrics:
+    - metrics/validation_raw.json
+    
+  transform_silver:
+    cmd: dbt run --project-dir dbt_project --target prod --models staging
+    deps:
+    - data/raw/
+    - dbt_project/models/staging/
+    outs:
+    - data/silver/stg_patients.parquet
+    - data/silver/stg_visits.parquet
+    - data/silver/stg_lab_results.parquet
+    - data/silver/stg_medications.parquet
+    metrics:
+    - metrics/silver_transform.json
+    
+  validate_silver:
+    cmd: python -m clinical_data_platform.validation.validate --data-path data/silver
+    deps:
+    - data/silver/
+    - clinical_data_platform/validation/
+    - great_expectations/expectations/
+    outs:
+    - data/validation/silver_validation_report.json
+    metrics:
+    - metrics/validation_silver.json
+    
+  transform_gold:
+    cmd: dbt run --project-dir dbt_project --target prod --models marts
+    deps:
+    - data/silver/
+    - dbt_project/models/marts/
+    outs:
+    - data/gold/fact_patient_outcomes.parquet
+    - data/gold/dim_patients.parquet
+    - data/gold/dim_medications.parquet
+    - data/gold/fact_lab_results.parquet
+    metrics:
+    - metrics/gold_transform.json
+    
+  feature_engineering:
+    cmd: python -m clinical_data_platform.ml.features --input data/gold --output data/features
+    deps:
+    - data/gold/
+    - clinical_data_platform/ml/features.py
+    outs:
+    - data/features/patient_features.parquet
+    - data/features/outcome_features.parquet
+    - data/features/feature_metadata.json
+    metrics:
+    - metrics/feature_engineering.json
+    
+  train_model:
+    cmd: python -m clinical_data_platform.ml.train --features data/features --model-output models/
+    deps:
+    - data/features/
+    - clinical_data_platform/ml/train.py
+    - clinical_data_platform/ml/models/
+    params:
+    - params.yaml:train
+    outs:
+    - models/outcome_predictor.pkl
+    - models/feature_scaler.pkl
+    metrics:
+    - metrics/model_training.json:
+        cache: false
+    plots:
+    - plots/confusion_matrix.png:
+        cache: false
+    - plots/feature_importance.png:
+        cache: false
+        
+  evaluate_model:
+    cmd: python -m clinical_data_platform.ml.evaluate --model models/outcome_predictor.pkl --test-data data/features/
+    deps:
+    - models/outcome_predictor.pkl
+    - models/feature_scaler.pkl
+    - data/features/
+    - clinical_data_platform/ml/evaluate.py
+    metrics:
+    - metrics/model_evaluation.json:
+        cache: false
+    plots:
+    - plots/roc_curve.png:
+        cache: false
+    - plots/precision_recall.png:
+        cache: false
+    - plots/calibration_plot.png:
+        cache: false
+        
+  register_model:
+    cmd: python -m clinical_data_platform.ml.registry --model models/outcome_predictor.pkl --metrics metrics/model_evaluation.json
+    deps:
+    - models/outcome_predictor.pkl
+    - metrics/model_evaluation.json
+    - clinical_data_platform/ml/registry.py
+    outs:
+    - models/registered_model_metadata.json
+    
+  deploy_model:
+    cmd: python -m clinical_data_platform.ml.deploy --model-uri models/outcome_predictor.pkl --environment ${ENVIRONMENT:-dev}
+    deps:
+    - models/outcome_predictor.pkl
+    - models/registered_model_metadata.json
+    - clinical_data_platform/ml/deploy.py
+    outs:
+    - deployment/model_service_config.json
+
+plots:
+  - ROC Curve:
+      template: roc
+      x: fpr
+      y: tpr
+  - Precision-Recall:
+      template: linear
+      x: recall
+      y: precision
+  - Feature Importance:
+      template: bar_horizontal
+      x: importance
+      y: feature
+      
+metrics:
+  - metrics/model_training.json
+  - metrics/model_evaluation.json
+  - metrics/ingestion.json
+  - metrics/validation_raw.json
+  - metrics/validation_silver.json

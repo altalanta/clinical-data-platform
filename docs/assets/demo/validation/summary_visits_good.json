@@ -1,0 +1,125 @@
+{
+  "pandera": {
+    "tool": "pandera",
+    "ok": true,
+    "rows": 3
+  },
+  "great_expectations": {
+    "tool": "great_expectations",
+    "ok": true,
+    "statistics": {
+      "evaluated_expectations": 3,
+      "successful_expectations": 3,
+      "unsuccessful_expectations": 0,
+      "success_percent": 100.0
+    },
+    "result": {
+      "success": true,
+      "results": [
+        {
+          "success": true,
+          "expectation_config": {
+            "expectation_type": "expect_column_values_to_not_be_null",
+            "kwargs": {
+              "column": "visit_id",
+              "batch_id": []
+            },
+            "meta": {}
+          },
+          "result": {
+            "element_count": 3,
+            "unexpected_count": 0,
+            "unexpected_percent": 0.0,
+            "partial_unexpected_list": []
+          },
+          "meta": {},
+          "exception_info": {
+            "raised_exception": false,
+            "exception_traceback": null,
+            "exception_message": null
+          }
+        },
+        {
+          "success": true,
+          "expectation_config": {
+            "expectation_type": "expect_column_values_to_be_unique",
+            "kwargs": {
+              "column": "visit_id",
+              "batch_id": []
+            },
+            "meta": {}
+          },
+          "result": {
+            "element_count": 3,
+            "unexpected_count": 0,
+            "unexpected_percent": 0.0,
+            "partial_unexpected_list": [],
+            "missing_count": 0,
+            "missing_percent": 0.0,
+            "unexpected_percent_total": 0.0,
+            "unexpected_percent_nonmissing": 0.0
+          },
+          "meta": {},
+          "exception_info": {
+            "raised_exception": false,
+            "exception_traceback": null,
+            "exception_message": null
+          }
+        },
+        {
+          "success": true,
+          "expectation_config": {
+            "expectation_type": "expect_column_values_to_be_between",
+            "kwargs": {
+              "column": "cost",
+              "min_value": 0,
+              "max_value": 500,
+              "strict_max": true,
+              "batch_id": []
+            },
+            "meta": {}
+          },
+          "result": {
+            "element_count": 3,
+            "unexpected_count": 0,
+            "unexpected_percent": 0.0,
+            "partial_unexpected_list": [],
+            "missing_count": 0,
+            "missing_percent": 0.0,
+            "unexpected_percent_total": 0.0,
+            "unexpected_percent_nonmissing": 0.0
+          },
+          "meta": {},
+          "exception_info": {
+            "raised_exception": false,
+            "exception_traceback": null,
+            "exception_message": null
+          }
+        }
+      ],
+      "evaluation_parameters": {},
+      "statistics": {
+        "evaluated_expectations": 3,
+        "successful_expectations": 3,
+        "unsuccessful_expectations": 0,
+        "success_percent": 100.0
+      },
+      "meta": {
+        "great_expectations_version": "0.18.22",
+        "expectation_suite_name": "visits_suite",
+        "run_id": {
+          "run_name": null,
+          "run_time": "2025-09-20T10:01:25.134722-04:00"
+        },
+        "batch_spec": {},
+        "batch_markers": {
+          "ge_load_time": "20250920T140125.134599Z"
+        },
+        "active_batch_definition": {},
+        "validation_time": "20250920T140125.134709Z",
+        "checkpoint_name": null
+      }
+    }
+  },
+  "data": "analytics/dbt/seeds/visits_good.csv"
+}

@@ -1,0 +1,7 @@
+{
+  "metrics": {
+    "accuracy": 0.9473684210526315,
+    "log_loss": 0.17567267215478632
+  },
+  "mlruns_path": "/Users/artemisfolle/Documents/Coding_Projects/clinical-data-platform/mlruns"
+}

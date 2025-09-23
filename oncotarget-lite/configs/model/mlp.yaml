@@ -1,0 +1,46 @@
+# @package model
+
+# Multi-Layer Perceptron configuration
+name: "mlp"
+class_name: "MLPClassifier"
+
+# Hyperparameter search space
+hyperparameters:
+  # Hidden layer dimensions
+  hidden_dims: [[64], [128], [64, 32], [128, 64], [256, 128, 64]]
+  # Dropout rate
+  dropout: [0.1, 0.2, 0.3, 0.5]
+  # Learning rate
+  learning_rate: [0.001, 0.01, 0.1]
+  # Weight decay (L2 regularization)
+  weight_decay: [0.0, 0.001, 0.01, 0.1]
+  # Batch size
+  batch_size: [32, 64, 128]
+
+# Model-specific settings
+settings:
+  # Activation function
+  activation: "relu"
+  # Optimizer
+  optimizer: "adam"
+  # Maximum epochs
+  max_epochs: 200
+  # Early stopping patience
+  patience: 20
+  # Random state
+  random_state: 42
+  # Class weights for imbalanced data
+  class_weight: "balanced"
+  # Device (cpu or cuda)
+  device: "cpu"
+
+# Hyperparameter optimization
+optimization:
+  # Search method: grid, random, bayes
+  method: "random"
+  # Number of iterations for random/bayes search
+  n_iter: 50
+  # Scoring metric for optimization
+  scoring: "average_precision"  # AUPRC
+  # Cross-validation folds for hyperparameter tuning
+  cv_folds: 3

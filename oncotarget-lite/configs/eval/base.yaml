@@ -1,0 +1,69 @@
+# @package eval
+
+# Evaluation configuration
+name: "base"
+
+# Bootstrap confidence intervals
+bootstrap:
+  # Number of bootstrap resamples
+  n_bootstrap: 1000
+  # Confidence level (0.95 = 95% CI)
+  confidence_level: 0.95
+  # Random state for reproducibility
+  random_state: 42
+  # Stratified bootstrap (maintain class proportions)
+  stratified: true
+
+# Classification metrics
+metrics:
+  # Primary metrics with bootstrap CIs
+  primary:
+    - "auroc"
+    - "auprc"
+    - "brier_score"
+  
+  # Secondary metrics
+  secondary:
+    - "accuracy"
+    - "precision"
+    - "recall"
+    - "f1_score"
+    - "specificity"
+
+# Calibration assessment
+calibration:
+  # Enable calibration analysis
+  enabled: true
+  # Number of bins for reliability curve
+  n_bins: 10
+  # Post-hoc calibration methods to try
+  methods: ["platt", "isotonic"]
+  
+# Decision-focused metrics
+decision_metrics:
+  # Clinical prevalence for decision metrics
+  prevalence: 0.05
+  # Sensitivity at fixed false positive rates
+  sensitivity_at_fpr: [0.01, 0.05, 0.10]
+  # Positive predictive value at top-k percentile
+  ppv_at_topk: [1, 5, 10]  # Top 1%, 5%, 10%
+  
+# Slice analysis (per-tissue/subgroup)
+slice_analysis:
+  # Enable per-tissue analysis
+  enabled: true
+  # Minimum samples per slice for reliable estimates
+  min_samples: 10
+  # Metrics to compute per slice
+  slice_metrics: ["auroc", "auprc", "calibration_slope"]
+
+# Plotting configuration
+plotting:
+  # Figure size
+  figsize: [8, 6]
+  # DPI for saved figures
+  dpi: 300
+  # File formats to save
+  formats: ["png", "pdf"]
+  # Color palette
+  palette: "Set2"

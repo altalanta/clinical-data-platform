@@ -1,0 +1,9 @@
+{
+  "duckdb_path": "/Users/artemisfolle/Documents/Coding_Projects/clinical-data-platform/data/demo.duckdb",
+  "target_files": [
+    "graph_summary.json",
+    "run_results.json",
+    "manifest.json",
+    "semantic_manifest.json"
+  ]
+}
