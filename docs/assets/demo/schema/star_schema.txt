@@ -1,0 +1,14 @@
+digraph G {
+rankdir=LR;
+"dim_patients" [shape=box, style=rounded]
+"dim_providers" [shape=box, style=rounded]
+"fact_visits" [shape=box, style=rounded]
+"patients" [shape=box, style=rounded]
+"providers" [shape=box, style=rounded]
+"stg_patients" [shape=box, style=rounded]
+"stg_providers" [shape=box, style=rounded]
+"stg_visits" [shape=box, style=rounded]
+"visits" [shape=box, style=rounded]
+"fact_visits" -> "dim_patients" [label="patient_id"]
+"fact_visits" -> "dim_providers" [label="provider_id"]
+}

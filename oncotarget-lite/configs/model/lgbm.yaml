@@ -1,0 +1,51 @@
+# @package model
+
+# LightGBM configuration
+name: "lgbm"
+class_name: "LGBMClassifier"
+
+# Hyperparameter search space
+hyperparameters:
+  # Number of leaves in trees
+  num_leaves: [31, 50, 100, 200]
+  # Learning rate
+  learning_rate: [0.01, 0.05, 0.1, 0.2]
+  # Number of boosting iterations
+  n_estimators: [100, 200, 500, 1000]
+  # Feature fraction for each tree
+  feature_fraction: [0.8, 0.9, 1.0]
+  # Bagging fraction
+  bagging_fraction: [0.8, 0.9, 1.0]
+  # Regularization
+  reg_alpha: [0.0, 0.1, 1.0]
+  reg_lambda: [0.0, 0.1, 1.0]
+  # Minimum samples in leaf
+  min_child_samples: [20, 50, 100]
+
+# Model-specific settings
+settings:
+  # Objective function
+  objective: "binary"
+  # Metric for evaluation
+  metric: "auc"
+  # Class balancing
+  is_unbalance: true
+  # Random state
+  random_state: 42
+  # Verbosity
+  verbose: -1
+  # Early stopping
+  early_stopping_rounds: 50
+  # Number of jobs
+  n_jobs: -1
+
+# Hyperparameter optimization
+optimization:
+  # Search method: grid, random, bayes
+  method: "random"
+  # Number of iterations for random/bayes search
+  n_iter: 100
+  # Scoring metric for optimization
+  scoring: "average_precision"  # AUPRC
+  # Cross-validation folds for hyperparameter tuning
+  cv_folds: 3

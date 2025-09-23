@@ -1,0 +1,70 @@
+# @package ablation
+
+# Ablation study configuration
+name: "base"
+
+# Feature set ablations
+feature_sets:
+  # Omics-only features (expression data)
+  omics_only:
+    enabled: true
+    include_expression: true
+    include_pathways: false
+    description: "Gene expression features only"
+  
+  # Omics + pathway features
+  omics_plus_pathways:
+    enabled: true
+    include_expression: true
+    include_pathways: true
+    description: "Gene expression + pathway aggregation features"
+
+# Model family ablations
+model_families:
+  - "logreg"
+  - "lgbm" 
+  - "mlp"
+
+# Preprocessing ablations
+preprocessing_ablations:
+  # Batch correction methods
+  batch_correction:
+    - "none"
+    - "combat_seq"
+    - "ruvg"
+  
+  # Normalization methods
+  normalization:
+    - "log1p_zscore"
+    - "cpm_zscore"
+    - "zscore_only"
+
+# Regularization sweeps
+regularization_sweeps:
+  # For logistic regression
+  logreg_c_values: [0.001, 0.01, 0.1, 1.0, 10.0, 100.0]
+  logreg_l1_ratios: [0.0, 0.1, 0.5, 0.9, 1.0]
+  
+  # For LightGBM
+  lgbm_reg_alpha: [0.0, 0.1, 1.0, 10.0]
+  lgbm_reg_lambda: [0.0, 0.1, 1.0, 10.0]
+  
+  # For MLP
+  mlp_weight_decay: [0.0, 0.001, 0.01, 0.1]
+
+# Cross-validation settings for ablations
+cross_validation:
+  # Reduced CV for ablations (faster)
+  outer_folds: 3
+  inner_folds: 2
+  # Number of random seeds to test
+  n_seeds: 3
+
+# Output configuration
+output:
+  # Save detailed results for each ablation
+  save_predictions: true
+  # Save model artifacts
+  save_models: false
+  # Generate comparison plots
+  generate_plots: true

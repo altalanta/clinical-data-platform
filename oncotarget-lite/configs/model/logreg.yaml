@@ -1,0 +1,38 @@
+# @package model
+
+# Logistic Regression configuration
+name: "logreg"
+class_name: "LogisticRegression"
+
+# Hyperparameter search space
+hyperparameters:
+  # Regularization strength (inverse)
+  C: [0.001, 0.01, 0.1, 1.0, 10.0, 100.0]
+  # Elastic net mixing parameter (0=Ridge, 1=Lasso)
+  l1_ratio: [0.0, 0.1, 0.5, 0.7, 0.9, 1.0]
+  # Solver
+  solver: ["saga"]  # Supports elastic net
+  # Class balancing
+  class_weight: ["balanced"]
+  # Maximum iterations
+  max_iter: [1000]
+
+# Model-specific settings
+settings:
+  # Enable feature standardization
+  standardize: true
+  # Random state
+  random_state: 42
+  # Number of jobs for parallel processing
+  n_jobs: -1
+
+# Hyperparameter optimization
+optimization:
+  # Search method: grid, random, bayes
+  method: "grid"
+  # Number of iterations for random/bayes search
+  n_iter: 50
+  # Scoring metric for optimization
+  scoring: "average_precision"  # AUPRC
+  # Cross-validation folds for hyperparameter tuning
+  cv_folds: 3
