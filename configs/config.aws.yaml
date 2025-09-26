@@ -1,0 +1,18 @@
+env: aws
+storage:
+  s3_endpoint: https://s3.amazonaws.com
+  access_key: ${AWS_ACCESS_KEY_ID}
+  secret_key: ${AWS_SECRET_ACCESS_KEY}
+  raw_bucket: your-raw-bucket
+  bronze_bucket: your-bronze-bucket
+  silver_bucket: your-silver-bucket
+  use_ssl: true
+warehouse:
+  duckdb_path: data/warehouse.duckdb
+paths:
+  data_root: data
+  raw_dir: data/sample_raw
+  standardized_dir: data/sample_standardized
+mlflow:
+  tracking_uri: ${MLFLOW_TRACKING_URI}
+

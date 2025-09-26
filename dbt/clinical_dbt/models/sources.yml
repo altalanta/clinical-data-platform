@@ -1,0 +1,175 @@
+version: 2
+
+sources:
+  - name: sdtm_silver
+    description: "Standardized SDTM data from silver layer (post-validation)"
+    meta:
+      layer: "raw"
+      owner: "clinical_data_platform"
+    
+    tables:
+      - name: dm
+        description: "Demographics domain - subject characteristics"
+        columns:
+          - name: studyid
+            description: "Study identifier"
+            tests:
+              - not_null
+              - accepted_values:
+                  values: ['STUDY001']
+          
+          - name: subjid
+            description: "Subject identifier within study"
+            tests:
+              - not_null
+              - unique
+          
+          - name: age
+            description: "Age in years"
+            tests:
+              - dbt_expectations.expect_column_values_to_be_between:
+                  min_value: 0
+                  max_value: 150
+          
+          - name: sex
+            description: "Sex of subject"
+            tests:
+              - accepted_values:
+                  values: ['M', 'F', 'U']
+          
+          - name: arm
+            description: "Treatment arm"
+
+      - name: ae
+        description: "Adverse Events domain"
+        columns:
+          - name: studyid
+            description: "Study identifier"
+            tests:
+              - not_null
+          
+          - name: subjid
+            description: "Subject identifier"
+            tests:
+              - not_null
+              - relationships:
+                  to: source('sdtm_silver', 'dm')
+                  field: subjid
+          
+          - name: aestdtc
+            description: "Adverse event start date/time"
+          
+          - name: aeendtc
+            description: "Adverse event end date/time"
+          
+          - name: aesev
+            description: "Severity of adverse event"
+            tests:
+              - accepted_values:
+                  values: ['MILD', 'MODERATE', 'SEVERE']
+          
+          - name: aeser
+            description: "Serious adverse event flag"
+            tests:
+              - accepted_values:
+                  values: [true, false]
+          
+          - name: aeout
+            description: "Outcome of adverse event"
+
+      - name: lb
+        description: "Laboratory data domain"
+        columns:
+          - name: studyid
+            description: "Study identifier"
+            tests:
+              - not_null
+          
+          - name: subjid
+            description: "Subject identifier"
+            tests:
+              - not_null
+              - relationships:
+                  to: source('sdtm_silver', 'dm')
+                  field: subjid
+          
+          - name: lbtestcd
+            description: "Laboratory test code"
+            tests:
+              - not_null
+          
+          - name: lborres
+            description: "Laboratory test result"
+          
+          - name: lborresu
+            description: "Original units"
+          
+          - name: lblnor
+            description: "Lower normal range"
+          
+          - name: lbhnor
+            description: "Upper normal range"
+
+      - name: vs
+        description: "Vital Signs domain"
+        columns:
+          - name: studyid
+            description: "Study identifier"
+            tests:
+              - not_null
+          
+          - name: subjid
+            description: "Subject identifier"
+            tests:
+              - not_null
+              - relationships:
+                  to: source('sdtm_silver', 'dm')
+                  field: subjid
+          
+          - name: vstestcd
+            description: "Vital signs test code"
+            tests:
+              - not_null
+          
+          - name: vsorres
+            description: "Vital signs result"
+          
+          - name: vsorresu
+            description: "Original units"
+
+      - name: ex
+        description: "Exposure domain"
+        columns:
+          - name: studyid
+            description: "Study identifier"
+            tests:
+              - not_null
+          
+          - name: subjid
+            description: "Subject identifier"
+            tests:
+              - not_null
+              - relationships:
+                  to: source('sdtm_silver', 'dm')
+                  field: subjid
+          
+          - name: extrt
+            description: "Name of treatment"
+          
+          - name: exdose
+            description: "Dose amount"
+            tests:
+              - dbt_expectations.expect_column_values_to_be_of_type:
+                  column_type: double
+          
+          - name: exstdtc
+            description: "Exposure start date/time"
+          
+          - name: exendtc
+            description: "Exposure end date/time"
+
+    freshness:
+      warn_after: {count: 24, period: hour}
+      error_after: {count: 48, period: hour}
+    
+    loaded_at_field: "_dbt_loaded_at"

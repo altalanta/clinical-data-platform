@@ -1,0 +1,50 @@
+clinical_dbt:
+  outputs:
+    local:
+      type: duckdb
+      path: ../../data/warehouse.duckdb
+      threads: 4
+      extensions:
+        - httpfs
+        - parquet
+      settings:
+        memory_limit: '2GB'
+        threads: 4
+    
+    dev:
+      type: duckdb
+      path: ../../data/warehouse_dev.duckdb
+      threads: 2
+      extensions:
+        - httpfs
+        - parquet
+      settings:
+        memory_limit: '1GB'
+        threads: 2
+    
+    test:
+      type: duckdb
+      path: ':memory:'
+      threads: 1
+      extensions:
+        - parquet
+      settings:
+        memory_limit: '512MB'
+        threads: 1
+    
+    prod:
+      type: duckdb
+      path: "{{ env_var('DUCKDB_PATH', '../../data/warehouse_prod.duckdb') }}"
+      threads: "{{ env_var('DUCKDB_THREADS', 8) | as_number }}"
+      extensions:
+        - httpfs
+        - parquet
+        - aws
+      settings:
+        memory_limit: "{{ env_var('DUCKDB_MEMORY_LIMIT', '4GB') }}"
+        s3_region: "{{ env_var('AWS_REGION', 'us-east-1') }}"
+        s3_access_key_id: "{{ env_var('AWS_ACCESS_KEY_ID', '') }}"
+        s3_secret_access_key: "{{ env_var('AWS_SECRET_ACCESS_KEY', '') }}"
+  
+  target: local
+

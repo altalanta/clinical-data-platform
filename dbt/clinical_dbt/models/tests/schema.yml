@@ -1,0 +1,204 @@
+version: 2
+
+sources:
+  - name: clinical_raw
+    description: "Raw clinical data from CDISC SDTM domains"
+    freshness:
+      warn_after: {count: 6, period: hour}
+      error_after: {count: 12, period: hour}
+    tables:
+      - name: DM
+        description: "Demographics domain - raw subject data"
+        columns:
+          - name: STUDYID
+            description: "Study identifier"
+            tests: [not_null]
+          - name: SUBJID
+            description: "Subject identifier within study"
+            tests: [not_null]
+          - name: USUBJID
+            description: "Unique subject identifier across studies"
+            tests: [not_null, unique]
+          
+      - name: AE
+        description: "Adverse Events domain"
+        columns:
+          - name: USUBJID
+            description: "Unique subject identifier"
+            tests: [not_null]
+          - name: AESTDTC
+            description: "Start date/time of adverse event"
+            tests: [not_null]
+
+models:
+  - name: stg_subjects
+    description: "Staged subject data from raw SDTM DM domain with quality checks"
+    tests:
+      - dbt_utils.not_null_proportion:
+          at_least: 0.95
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [subject_id, study_id]
+    columns:
+      - name: subject_id
+        description: "Unique subject identifier within study"
+        tests: [not_null, unique]
+      - name: study_id
+        description: "Study identifier"
+        tests: 
+          - not_null
+          - accepted_values:
+              values: ['STUDY001', 'STUDY002', 'PILOT']
+      - name: age
+        description: "Subject age at enrollment"
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 120
+              inclusive: true
+      - name: sex
+        description: "Subject biological sex"
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['M', 'F', 'U']
+              quote: false
+      - name: arm
+        description: "Treatment arm assignment"
+        tests:
+          - accepted_values:
+              values: ['PLACEBO', 'ACTIVE', 'CONTROL']
+              quote: false
+      - name: enrollment_date
+        description: "Date of enrollment"
+        tests:
+          - not_null
+          - dbt_utils.recency:
+              datepart: day
+              interval: 730  # 2 years
+              ignore_time_component: true
+              
+  - name: stg_adverse_events
+    description: "Staged adverse events with validation"
+    tests:
+      - dbt_utils.not_null_proportion:
+          at_least: 0.98
+    columns:
+      - name: ae_id
+        description: "Unique adverse event identifier"
+        tests: [not_null, unique]
+      - name: subject_id
+        description: "Subject experiencing the adverse event"
+        tests: 
+          - not_null
+          - relationships:
+              to: ref('stg_subjects')
+              field: subject_id
+      - name: ae_start_date
+        description: "Adverse event start date"
+        tests:
+          - not_null
+          - dbt_utils.recency:
+              datepart: day
+              interval: 365
+      - name: severity
+        description: "Severity of adverse event"
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['MILD', 'MODERATE', 'SEVERE']
+              quote: false
+      - name: serious_flag
+        description: "Whether adverse event is serious"
+        tests:
+          - not_null
+          - accepted_values:
+              values: [true, false]
+              quote: false
+      - name: outcome
+        description: "Outcome of adverse event"
+        tests:
+          - accepted_values:
+              values: ['RECOVERED', 'ONGOING', 'FATAL', 'UNKNOWN']
+              quote: false
+
+  - name: subject_mart
+    description: "Subject dimensional table for analytics with full validation"
+    tests:
+      - dbt_utils.not_null_proportion:
+          at_least: 0.99
+      - dbt_utils.row_count:
+          above: 0
+    columns:
+      - name: subject_id
+        description: "Primary key - unique subject identifier"
+        tests: 
+          - not_null
+          - unique
+      - name: study_id
+        description: "Study identifier - foreign key"
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['STUDY001', 'STUDY002', 'PILOT']
+      - name: total_ae_count
+        description: "Total count of adverse events for subject"
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 100
+      - name: severe_ae_count
+        description: "Count of severe adverse events"
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 50
+      - name: days_on_study
+        description: "Number of days subject was on study"
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 1
+              max_value: 1095  # 3 years max
+      - name: completion_status
+        description: "Study completion status"
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['COMPLETED', 'WITHDRAWN', 'ONGOING', 'DECEASED']
+
+exposures:
+  - name: clinical_api
+    type: application
+    maturity: high
+    url: http://localhost:8000
+    description: "Clinical data platform API serving subject and study data"
+    depends_on:
+      - ref('subject_mart')
+      - ref('stg_subjects')
+    owner:
+      name: Clinical Platform Team
+      email: clinical-platform@example.com
+
+  - name: risk_prediction_model
+    type: ml
+    maturity: medium
+    description: "ML model for predicting patient risk using clinical features"
+    depends_on:
+      - ref('subject_mart')
+    owner:
+      name: Data Science Team
+      email: data-science@example.com
+
+  - name: regulatory_reports
+    type: report
+    maturity: high
+    description: "Regulatory compliance reports for clinical trials"
+    depends_on:
+      - ref('stg_adverse_events')
+      - ref('subject_mart')
+    owner:
+      name: Regulatory Affairs
+      email: regulatory@example.com

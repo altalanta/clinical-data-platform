@@ -1,0 +1,68 @@
+version: 1
+disable_existing_loggers: false
+
+formatters:
+  json:
+    class: pythonjsonlogger.jsonlogger.JsonFormatter
+    format: "%(asctime)s %(name)s %(levelname)s %(message)s %(pathname)s %(lineno)d %(process)d %(thread)d"
+  structured:
+    class: clinical_platform.logging_utils.PHIFilterFormatter
+    format: "%(asctime)s [%(levelname)8s] %(name)s: %(message)s (%(filename)s:%(lineno)d)"
+
+filters:
+  phi_filter:
+    class: clinical_platform.logging_utils.PHIFilter
+
+handlers:
+  console:
+    class: logging.StreamHandler
+    level: INFO
+    formatter: structured
+    filters: [phi_filter]
+    stream: ext://sys.stdout
+  
+  file:
+    class: logging.handlers.RotatingFileHandler
+    level: DEBUG
+    formatter: json
+    filters: [phi_filter]
+    filename: logs/clinical_platform.log
+    maxBytes: 10485760  # 10MB
+    backupCount: 5
+    encoding: utf8
+
+  error_file:
+    class: logging.handlers.RotatingFileHandler
+    level: ERROR
+    formatter: json
+    filters: [phi_filter]
+    filename: logs/clinical_platform_errors.log
+    maxBytes: 10485760  # 10MB
+    backupCount: 5
+    encoding: utf8
+
+loggers:
+  clinical_platform:
+    level: DEBUG
+    handlers: [console, file, error_file]
+    propagate: false
+  
+  uvicorn:
+    level: INFO
+    handlers: [console, file]
+    propagate: false
+    
+  mlflow:
+    level: INFO
+    handlers: [file]
+    propagate: false
+    
+  dbt:
+    level: INFO
+    handlers: [file]
+    propagate: false
+
+root:
+  level: INFO
+  handlers: [console, file]
+
