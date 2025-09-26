@@ -1,0 +1,111 @@
+name: 'clinical_dbt'
+version: '1.0.0'
+config-version: 2
+
+profile: 'clinical_dbt'
+
+# Project structure
+model-paths: ['models']
+seed-paths: ['seeds']
+macro-paths: ['macros']
+test-paths: ['tests']
+analysis-paths: ['analysis']
+snapshot-paths: ['snapshots']
+
+# Documentation settings
+docs-paths: ['docs']
+
+# Asset paths for compiled SQL/docs
+target-path: 'target'
+clean-targets:
+  - 'target'
+  - 'dbt_packages'
+
+# Global configurations
+vars:
+  # Date and time formats
+  date_format: '%Y-%m-%d'
+  datetime_format: '%Y-%m-%d %H:%M:%S'
+  
+  # Study configuration
+  study_id: 'STUDY001'
+  study_name: 'Clinical Data Platform Demo Study'
+  
+  # Data quality thresholds
+  completeness_threshold: 0.95
+  age_min: 0
+  age_max: 150
+
+# Model configurations
+models:
+  clinical_dbt:
+    +materialized: table
+    +on_schema_change: 'fail'
+    
+    # Source/staging layer - read from standardized SDTM data
+    staging:
+      +materialized: view
+      +schema: staging
+      +docs:
+        node_color: '#90EE90'  # Light green
+    
+    # Intermediate layer - business logic transformations
+    intermediate:
+      +materialized: view
+      +schema: intermediate
+      +docs:
+        node_color: '#FFE4B5'  # Moccasin
+    
+    # Marts layer - final business tables
+    marts:
+      +materialized: table
+      +schema: marts
+      +docs:
+        node_color: '#87CEEB'  # Sky blue
+      
+      # Clinical marts
+      clinical:
+        +schema: clinical_marts
+      
+      # Analytics marts
+      analytics:
+        +schema: analytics_marts
+
+# Seed configurations
+seeds:
+  clinical_dbt:
+    +schema: seeds
+    +docs:
+      node_color: '#DDA0DD'  # Plum
+
+# Snapshot configurations
+snapshots:
+  clinical_dbt:
+    +target_schema: snapshots
+    +strategy: timestamp
+    +updated_at: updated_at
+
+# Test configurations
+tests:
+  +store_failures: true
+  +severity: 'warn'
+
+# Documentation
+docs:
+  clinical_dbt:
+    +docs:
+      node_color: '#F0E68C'  # Khaki
+
+# Macros and analyses
+macro-paths: ['macros']
+analysis-paths: ['analysis']
+
+# Package management
+packages-install-path: 'dbt_packages'
+
+# Quoting configuration
+quoting:
+  database: false
+  schema: false
+  identifier: false
+

@@ -1,0 +1,241 @@
+version: 2
+
+models:
+  - name: fact_subject_outcomes
+    description: "Primary fact table containing subject-level clinical outcomes and safety data"
+    columns:
+      - name: subject_key
+        description: "Surrogate key for subject"
+        tests:
+          - not_null
+          - unique
+
+      - name: subjid
+        description: "Subject identifier"
+        tests:
+          - not_null
+          - unique
+
+      - name: studyid
+        description: "Study identifier"
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['STUDY001']
+
+      - name: treatment_arm
+        description: "Treatment arm assignment"
+        tests:
+          - not_null
+
+      - name: age
+        description: "Subject age in years"
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 150
+
+      - name: sex
+        description: "Subject sex"
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['M', 'F', 'U']
+
+      - name: age_group
+        description: "Categorized age group"
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['PEDIATRIC', 'ADULT', 'ELDERLY', 'UNKNOWN']
+
+      - name: total_adverse_events
+        description: "Total number of adverse events for subject"
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: bigint
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 1000  # Reasonable upper bound
+
+      - name: serious_adverse_events
+        description: "Number of serious adverse events"
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+
+      - name: abnormal_lab_rate
+        description: "Rate of abnormal laboratory results"
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 1
+
+      - name: abnormal_vital_rate
+        description: "Rate of abnormal vital signs"
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 1
+
+      - name: data_completeness_score
+        description: "Score indicating completeness of subject data"
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 1
+
+      - name: safety_risk_category
+        description: "Categorized safety risk level"
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['NO_EVENTS', 'LOW_RISK', 'MEDIUM_RISK', 'HIGH_RISK']
+
+      - name: clinical_profile
+        description: "Overall clinical profile categorization"
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['NORMAL_PROFILE', 'SERIOUS_SAFETY_CONCERN', 'MULTIPLE_ABNORMALITIES', 'HIGH_LAB_ABNORMALITIES', 'HIGH_VITAL_ABNORMALITIES']
+
+      - name: participation_quality
+        description: "Quality of subject participation"
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['HIGH_QUALITY', 'MEDIUM_QUALITY', 'LOW_QUALITY']
+
+    tests:
+      - dbt_expectations.expect_table_row_count_to_be_between:
+          min_value: 1
+          max_value: 10000
+      
+      - dbt_expectations.expect_table_column_count_to_equal:
+          value: 30  # Update based on actual column count
+      
+      # Business logic tests
+      - dbt_utils.expression_is_true:
+          expression: "serious_adverse_events <= total_adverse_events"
+          config:
+            severity: error
+      
+      - dbt_utils.expression_is_true:
+          expression: "severe_adverse_events <= total_adverse_events"
+          config:
+            severity: error
+      
+      - dbt_utils.expression_is_true:
+          expression: "abnormal_lab_results <= total_lab_tests"
+          config:
+            severity: error
+      
+      - dbt_utils.expression_is_true:
+          expression: "abnormal_vitals <= total_vital_measurements"
+          config:
+            severity: error
+
+  - name: dim_study_overview
+    description: "Study-level summary statistics and metrics"
+    columns:
+      - name: study_id
+        description: "Study identifier"
+        tests:
+          - not_null
+          - unique
+
+      - name: study_name
+        description: "Study name"
+        tests:
+          - not_null
+
+      - name: total_subjects
+        description: "Total number of subjects in study"
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 1
+
+      - name: treatment_arms_count
+        description: "Number of treatment arms"
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 1
+              max_value: 10
+
+      - name: mean_age
+        description: "Mean age of subjects"
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 150
+
+      - name: serious_ae_rate_percent
+        description: "Percentage of subjects with serious AEs"
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 100
+
+      - name: avg_data_completeness_percent
+        description: "Average data completeness percentage"
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 100
+
+      - name: study_status
+        description: "Current status of study"
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['ONGOING', 'COMPLETED']
+
+      - name: overall_safety_profile
+        description: "Overall safety assessment"
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['LOW_SAFETY_CONCERN', 'MODERATE_SAFETY_CONCERN', 'HIGH_SAFETY_CONCERN']
+
+      - name: data_quality_assessment
+        description: "Overall data quality assessment"
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['HIGH_QUALITY_DATA', 'MEDIUM_QUALITY_DATA', 'LOW_QUALITY_DATA']
+
+    tests:
+      - dbt_expectations.expect_table_row_count_to_equal:
+          value: 1  # Should be one row per study
+      
+      # Business logic tests
+      - dbt_utils.expression_is_true:
+          expression: "male_subjects + female_subjects <= total_subjects"
+          config:
+            severity: error
+      
+      - dbt_utils.expression_is_true:
+          expression: "subjects_with_serious_aes <= total_subjects"
+          config:
+            severity: error
+      
+      - dbt_utils.expression_is_true:
+          expression: "median_age >= min_age and median_age <= max_age"
+          config:
+            severity: error
+      
+      - dbt_utils.expression_is_true:
+          expression: "mean_age >= min_age and mean_age <= max_age"
+          config:
+            severity: error

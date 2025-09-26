@@ -1,0 +1,14 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "DM",
+  "type": "object",
+  "properties": {
+    "STUDYID": {"type": "string"},
+    "SUBJID": {"type": "string"},
+    "ARM": {"type": ["string", "null"]},
+    "SEX": {"type": ["string", "null"]},
+    "AGE": {"type": ["number", "null"]}
+  },
+  "required": ["STUDYID", "SUBJID"]
+}
+

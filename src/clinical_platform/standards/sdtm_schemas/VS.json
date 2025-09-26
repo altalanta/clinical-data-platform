@@ -1,0 +1,14 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "VS",
+  "type": "object",
+  "properties": {
+    "STUDYID": {"type": "string"},
+    "SUBJID": {"type": "string"},
+    "VSTESTCD": {"type": "string"},
+    "VSORRES": {"type": ["number", "null"]},
+    "VSORRESU": {"type": ["string", "null"]}
+  },
+  "required": ["STUDYID", "SUBJID", "VSTESTCD"]
+}
+

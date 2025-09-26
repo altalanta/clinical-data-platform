@@ -1,0 +1,18 @@
+env: local
+storage:
+  s3_endpoint: http://localhost:9000
+  access_key: minioadmin
+  secret_key: minioadmin
+  raw_bucket: clinical-raw
+  bronze_bucket: clinical-bronze
+  silver_bucket: clinical-silver
+  use_ssl: false
+warehouse:
+  duckdb_path: data/warehouse.duckdb
+paths:
+  data_root: data
+  raw_dir: data/sample_raw
+  standardized_dir: data/sample_standardized
+mlflow:
+  tracking_uri: http://localhost:5000
+

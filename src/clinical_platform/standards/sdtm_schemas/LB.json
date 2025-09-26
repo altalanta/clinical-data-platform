@@ -1,0 +1,16 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "LB",
+  "type": "object",
+  "properties": {
+    "STUDYID": {"type": "string"},
+    "SUBJID": {"type": "string"},
+    "LBTESTCD": {"type": "string"},
+    "LBORRES": {"type": ["number", "null"]},
+    "LBORRESU": {"type": ["string", "null"]},
+    "LBLNOR": {"type": ["number", "null"]},
+    "LBHNOR": {"type": ["number", "null"]}
+  },
+  "required": ["STUDYID", "SUBJID", "LBTESTCD"]
+}
+
