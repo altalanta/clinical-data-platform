@@ -1,0 +1,9 @@
+sample_id,compound_id,smiles,plate_id,well_row,well_col,label,dose_nM,readout
+S1,C001,CCO,plate_A,A,1,1,10,0.12
+S2,C002,CCCl,plate_A,A,2,0,30,0.4
+S3,C003,CCN,plate_A,B,1,1,60,0.85
+S4,C004,CCBr,plate_A,B,2,0,100,0.65
+S5,C005,CCF,plate_B,A,1,1,20,0.22
+S6,C006,CCCC,plate_B,A,2,0,35,0.3
+S7,C007,CCCN,plate_B,B,1,1,70,0.9
+S8,C008,CCCO,plate_B,B,2,0,120,0.6

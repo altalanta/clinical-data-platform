@@ -29,8 +29,14 @@ help: ## Show this help message
 # SETUP AND DEPENDENCIES
 # =============================================================================
 
-setup: ## Set up development environment
-	@echo "$(BLUE)Setting up development environment...$(NC)"
+setup: ## Install pinned dependencies with pip
+	@echo "$(BLUE)Installing dependencies with pip...$(NC)"
+	python -m pip install --upgrade pip
+	pip install -r requirements.txt
+	@echo "$(GREEN)Dependencies installed. Consider \"make setup.poetry\" for the legacy workflow.$(NC)"
+
+setup.poetry: ## Legacy Poetry-based setup
+	@echo "$(BLUE)Setting up development environment with Poetry...$(NC)"
 	@command -v poetry >/dev/null 2>&1 || { echo "$(RED)Poetry not found. Please install: https://python-poetry.org/docs/#installation$(NC)"; exit 1; }
 	poetry install --with dev
 	poetry run pre-commit install
@@ -42,7 +48,9 @@ clean: ## Clean up generated files and caches
 	find . -type f -name "*.pyc" -delete 2>/dev/null || true
 	find . -type d -name ".pytest_cache" -exec rm -rf {} + 2>/dev/null || true
 	find . -type d -name "*.egg-info" -exec rm -rf {} + 2>/dev/null || true
-	rm -rf .coverage htmlcov/ dist/ build/
+	rm -rf .coverage htmlcov/ dist/ build/ data/processed reports docs/figures
+	rm -f docs/index.html docs/cp-tox-mini_report.html docs/model_card.md manifests/data_manifest.json
+	rm -f reports/index.html reports/cp-tox-mini_report.html reports/cp-tox-mini_report.md reports/model_card.md reports/model_metrics.json reports/leakage.json reports/ic50_summary.json
 	@echo "$(GREEN)Cleanup complete!$(NC)"
 
 # =============================================================================
@@ -285,6 +293,38 @@ docs: ## Generate and serve documentation
 	@echo "$(BLUE)Generating documentation...$(NC)"
 	poetry run mkdocs serve --dev-addr 0.0.0.0:8002
 
+
+# =============================================================================
+# CP-TOX MINI PIPELINE
+# =============================================================================
+
+.PHONY: data features fuse train eval diagnostics ic50 report
+
+data: ## Download deterministic CP tox inputs
+	python -m cp_tox_mini.cli download
+
+features: ## Build CP + chem features
+	python -m cp_tox_mini.cli features
+
+fuse: ## Fuse modalities and create train/test splits
+	python -m cp_tox_mini.cli fuse
+
+train: ## Train the CP tox baseline model
+	python -m cp_tox_mini.cli train
+
+# Retain eval verb to align with CLI naming conventions
+eval: ## Evaluate the CP tox model and emit metrics/figures
+	python -m cp_tox_mini.cli eval
+
+diagnostics: ## Run leakage probes and permutation diagnostics
+	python -m cp_tox_mini.cli diagnostics
+
+ic50: ## Estimate IC50 on the example dose-response curve
+	python -m cp_tox_mini.cli ic50
+
+report: ## Build Markdown/HTML reports and publish to docs/
+	python -m cp_tox_mini.cli report
+
 # =============================================================================
 # SHORTCUTS AND ALIASES
 # =============================================================================
@@ -305,7 +345,8 @@ ci: check data.validate ## Run CI pipeline locally
 	@echo "$(GREEN)CI pipeline completed successfully!$(NC)"
 
 # Default target
-all: help
+all: ## Run the deterministic CP tox mini pipeline
+	python -m cp_tox_mini.cli all
 
 .PHONY: obsv.up obsv.down obsv.status obsv.demo
 
