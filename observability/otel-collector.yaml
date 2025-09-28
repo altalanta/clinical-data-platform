@@ -1,0 +1,39 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+      http:
+
+processors:
+  batch:
+  attributes/add-service-name:
+    actions:
+      - key: service.name
+        action: insert
+        value: clinical-data-pipeline
+
+exporters:
+  loki:
+    endpoint: http://loki:3100/loki/api/v1/push
+    headers:
+      Content-Type: application/json
+    default_labels_enabled:
+      resource: true
+      instrumentation_scope: false
+      body: true
+  otlphttp/traces:
+    endpoint: http://tempo:4318/v1/traces
+    compression: gzip
+    tls:
+      insecure: true
+
+service:
+  pipelines:
+    logs/otlp:
+      receivers: [otlp]
+      processors: [batch, attributes/add-service-name]
+      exporters: [loki]
+    traces/otlp:
+      receivers: [otlp]
+      processors: [batch, attributes/add-service-name]
+      exporters: [otlphttp/traces]

@@ -1,0 +1,19 @@
+Metadata-Version: 2.4
+Name: clinical-data-platform
+Version: 0.1.0
+Requires-Python: >=3.10
+Requires-Dist: fastapi>=0.111
+Requires-Dist: uvicorn>=0.30
+Requires-Dist: pydantic>=2.7
+Requires-Dist: pandas>=2.2
+Requires-Dist: scikit-learn>=1.5
+Provides-Extra: dev
+Requires-Dist: pytest>=8.2; extra == "dev"
+Requires-Dist: pytest-cov>=5.0; extra == "dev"
+Requires-Dist: ruff>=0.6; extra == "dev"
+Requires-Dist: mypy>=1.11; extra == "dev"
+Requires-Dist: mkdocs-material>=9.5; extra == "dev"
+Requires-Dist: great-expectations>=0.18; extra == "dev"
+Requires-Dist: pandas>=2.2; extra == "dev"
+Requires-Dist: pandera>=0.20; extra == "dev"
+Requires-Dist: python-json-logger>=2.0; extra == "dev"

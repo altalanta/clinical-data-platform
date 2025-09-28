@@ -1,0 +1,200 @@
+{
+  "id": null,
+  "uid": "pipeline-observability",
+  "title": "Clinical Pipeline Observability",
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "Ingestion Throughput (rows/s)",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+      "datasource": {"type": "loki", "uid": "loki"},
+      "fieldConfig": {
+        "defaults": {
+          "unit": "rows",
+          "mappings": [],
+          "color": {"mode": "palette-classic"}
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {"displayMode": "list", "placement": "bottom"},
+        "tooltip": {"mode": "multi", "sort": "none"}
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {"type": "loki", "uid": "loki"},
+          "expr": "sum by (stage) (rate({pipeline=\"ingest\", status=\"success\"} | json | unwrap rows [5m]))",
+          "legendFormat": "{{stage}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Stage Latency (ms)",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+      "datasource": {"type": "loki", "uid": "loki"},
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "mappings": [],
+          "color": {"mode": "palette-classic"}
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {"displayMode": "list", "placement": "bottom"},
+        "tooltip": {"mode": "multi", "sort": "none"}
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "avg by (stage) ({pipeline=~\"ingest|dbt|train\"} | json | unwrap latency_ms)",
+          "datasource": {"type": "loki", "uid": "loki"}
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Pipeline Error Rate (5m)",
+      "gridPos": {"h": 6, "w": 6, "x": 0, "y": 8},
+      "datasource": {"type": "loki", "uid": "loki"},
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "orange", "value": 5},
+              {"color": "red", "value": 15}
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "horizontal"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "100 * sum(rate({level=\"error\"} [5m])) / clamp_min(sum(rate({pipeline=~\"ingest|dbt|train\"} [5m])), 1)",
+          "datasource": {"type": "loki", "uid": "loki"}
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Silver Freshness (minutes)",
+      "gridPos": {"h": 6, "w": 6, "x": 6, "y": 8},
+      "datasource": {"type": "loki", "uid": "loki"},
+      "fieldConfig": {
+        "defaults": {
+          "unit": "m",
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "orange", "value": 90},
+              {"color": "red", "value": 120}
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "center",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "horizontal"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max({pipeline=\"freshness\"} | json | unwrap freshness_minutes)",
+          "datasource": {"type": "loki", "uid": "loki"}
+        }
+      ]
+    },
+    {
+      "type": "state-timeline",
+      "title": "Pipeline Status",
+      "gridPos": {"h": 6, "w": 12, "x": 12, "y": 8},
+      "datasource": {"type": "loki", "uid": "loki"},
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 1}
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "alignValue": "left",
+        "showValue": "never"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{pipeline=~\"ingest|dbt|train\"} | json | line_format \"{{stage}} - {{status}}\"",
+          "datasource": {"type": "loki", "uid": "loki"}
+        }
+      ]
+    },
+    {
+      "type": "trace",
+      "title": "Pipeline Trace Explorer",
+      "gridPos": {"h": 10, "w": 24, "x": 0, "y": 14},
+      "datasource": {"type": "tempo", "uid": "tempo"},
+      "options": {
+        "showTable": true,
+        "defaultSearch": {
+          "query": "service.name=\"clinical-data-pipeline\"",
+          "search": "run_id={{run_id}}"
+        }
+      }
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "run_id",
+        "type": "query",
+        "datasource": {"type": "loki", "uid": "loki"},
+        "definition": "label_values({pipeline=~\"ingest|dbt|train\"}, run_id)",
+        "refresh": 2,
+        "query": "label_values({pipeline=~\"ingest|dbt|train\"}, run_id)",
+        "sort": 1
+      }
+    ]
+  },
+  "time": {"from": "now-6h", "to": "now"},
+  "timepicker": {
+    "refresh_intervals": ["10s", "30s", "1m", "5m", "15m"]
+  }
+}

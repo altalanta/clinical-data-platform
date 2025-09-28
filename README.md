@@ -1,5 +1,76 @@
 # Clinical Data Platform
 
+[![CI](https://github.com/altalanta/clinical-data-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/altalanta/clinical-data-platform/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/altalanta/clinical-data-platform/actions/workflows/codeql.yml/badge.svg)](https://github.com/altalanta/clinical-data-platform/actions/workflows/codeql.yml)
+[![Docker](https://github.com/altalanta/clinical-data-platform/actions/workflows/docker.yml/badge.svg)](https://github.com/altalanta/clinical-data-platform/actions/workflows/docker.yml)
+[![codecov](https://codecov.io/gh/altalanta/clinical-data-platform/graph/badge.svg?token=)](https://codecov.io/gh/altalanta/clinical-data-platform)
+[![Docs](https://img.shields.io/badge/docs-mkdocs--material-blue)](https://altalanta.github.io/clinical-data-platform/)
+[![Data Validation (good)](https://github.com/altalanta/clinical-data-platform/actions/workflows/validation-good.yml/badge.svg)](https://github.com/altalanta/clinical-data-platform/actions/workflows/validation-good.yml)
+[![Data Validation (bad)](https://github.com/altalanta/clinical-data-platform/actions/workflows/validation-bad.yml/badge.svg)](https://github.com/altalanta/clinical-data-platform/actions/workflows/validation-bad.yml)
+[![Compliance (PHI redaction)](https://github.com/altalanta/clinical-data-platform/actions/workflows/compliance.yml/badge.svg)](https://github.com/altalanta/clinical-data-platform/actions/workflows/compliance.yml)
+
+Local-first clinical data platform: ingest → transform (dbt/DuckDB) → validate → ML → API/UI.
+
+- **Docs:** https://altalanta.github.io/clinical-data-platform/
+- **Container:** `ghcr.io/altalanta/clinical-data-platform`
+- **Pre-commit:** `pip install pre-commit && pre-commit install`
+
+## GxP/HIPAA Read-Only Mode
+
+This repo includes a **read-only mode** and **PHI-safe logging**:
+
+- Read-only mode blocks `POST/PUT/PATCH/DELETE` when `READ_ONLY_MODE=1`.
+- Scrubbed logging removes PHI and omits sensitive keys when `LOG_SCRUB_VALUES=1` (automatically enabled in read-only mode).
+- Structured logs use a `PHIFilter` plus `python-json-logger` to avoid raw values reaching sinks.
+
+**Run API in read-only mode:**
+```bash
+make api.readonly
+# curl -i -X POST http://localhost:8000/predict  # -> 403
+```
+
+**Unit tests (redaction pipeline):**
+```bash
+make test.compliance
+```
+
+- Logging config reference: `config/logging/read_only.yaml`
+- CI status: [![Compliance (PHI redaction)](https://github.com/altalanta/clinical-data-platform/actions/workflows/compliance.yml/badge.svg)](https://github.com/altalanta/clinical-data-platform/actions/workflows/compliance.yml)
+
+## Data Gatekeeping (Great Expectations + pandera)
+
+This project keeps both pandera and Great Expectations side-by-side to gate data quality. The suite **fails** on the known-bad seed (`visits.csv`) and **passes** once the outlier is corrected (`visits_good.csv`).
+
+**Local:**
+```bash
+# Fails (bad data: one cost > 500)
+make validate.bad
+
+# Passes (fixed data)
+make validate.good
+```
+
+- CI (good dataset): [![Data Validation (good)](https://github.com/altalanta/clinical-data-platform/actions/workflows/validation-good.yml/badge.svg)](https://github.com/altalanta/clinical-data-platform/actions/workflows/validation-good.yml)
+- CI (bad dataset – expected to fail on `ci/ge-bad-demo` or manual dispatch): [![Data Validation (bad)](https://github.com/altalanta/clinical-data-platform/actions/workflows/validation-bad.yml/badge.svg)](https://github.com/altalanta/clinical-data-platform/actions/workflows/validation-bad.yml)
+- Artifacts land in `docs/assets/demo/validation/` (`summary_*.json`, `ge_result_*.json`).
+
+## Demo (screenshots & artifacts)
+
+- **dbt artifacts:** [`docs/assets/demo/dbt/`](docs/assets/demo/dbt/)
+- **Star schema snapshot:** ![schema](docs/assets/demo/schema/star_schema.png)
+- **MLflow metrics:** ![confusion matrix](docs/assets/demo/mlflow/confusion_matrix.png) · [`metrics.json`](docs/assets/demo/mlflow/metrics.json)
+- **API (captured curl outputs):** [`curl_health.txt`](docs/assets/demo/api/curl_health.txt) · [`curl_predict.json`](docs/assets/demo/api/curl_predict.json)
+- **Quick GIF:** ![demo gif](docs/assets/demo/demo.gif)
+
+Run locally:
+```bash
+make demo
+# (optional) run API for live curl
+uvicorn clinical_data_platform.api:app --reload
+curl -s http://localhost:8000/health
+curl -s -X POST http://localhost:8000/predict -H 'Content-Type: application/json' -d '{"features":[5.1,3.5,1.4,0.2]}'
+```
+
 Production-quality sample project demonstrating an end-to-end clinical data platform: ingest → validate/standardize (SDTM-like) → warehouse (star schema) → dbt transforms → analytics + ML → dashboard + API. Cloud-ready (AWS-first) while runnable locally without external credentials using DuckDB + MinIO + local MLflow.
 
 - Language: Python 3.11
@@ -27,6 +98,16 @@ Prereqs: Docker, Docker Compose, Python 3.11, Poetry.
 - make demo — end-to-end local pipeline, then open dashboard
 
 Everything runs locally by default; no external credentials required. To switch to AWS later, adjust `configs/config.aws.yaml` and env vars (see `.env.example`).
+
+## Observability
+
+- pip install -r requirements.txt — install local instrumentation dependencies
+- make obsv.up — start OpenTelemetry collector, Loki, Tempo, Grafana (admin/admin)
+- make obsv.demo — run ingest/dbt/train demos + compute silver freshness SLI
+- Dashboard: Grafana → Observability/Clinical Pipeline Observability (throughput, latency, errors, traces, freshness)
+- Logs land in Loki; traces in Tempo; alerts provisioned via `observability/rules/freshness_slo.yaml`
+- Freshness SLO: silver data updated within 120 minutes (tunable via `--slo-minutes`); outputs to `observability/freshness_sli.json`
+- Runbook: [ops/runbook.md](ops/runbook.md) details triage when the SLO breaches
 
 ## Mapping to the Job Description
 
@@ -73,4 +154,3 @@ Everything runs locally by default; no external credentials required. To switch 
 ## License
 
 MIT
-

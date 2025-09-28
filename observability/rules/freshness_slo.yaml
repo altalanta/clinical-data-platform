@@ -1,0 +1,57 @@
+apiVersion: 1
+groups:
+  - orgId: 1
+    name: freshness-slo
+    folder: Observability
+    interval: 1m
+    rules:
+      - uid: freshness-breach
+        title: Silver Layer Freshness Breach
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: loki
+            model:
+              datasource:
+                type: loki
+                uid: loki
+              expr: "max({pipeline=\"freshness\"} | json | unwrap freshness_minutes)"
+              format: time_series
+              interval: ""
+              intervalMs: 1000
+              maxLines: 1000
+              refId: A
+              queryType: range
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: loki
+            model:
+              datasource:
+                type: loki
+                uid: loki
+              expr: "max({pipeline=\"freshness\"} | json | unwrap slo_minutes)"
+              format: time_series
+              interval: ""
+              intervalMs: 1000
+              maxLines: 1000
+              refId: B
+              queryType: range
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              expression: "A > B"
+              type: math
+              refId: C
+        noDataState: NoData
+        execErrState: Error
+        for: 2m
+        annotations:
+          summary: "Silver freshness exceeded SLO minutes"
+        labels:
+          severity: critical
+        isPaused: false
