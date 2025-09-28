@@ -1,0 +1,55 @@
+version: "3.9"
+
+services:
+  loki:
+    image: grafana/loki:2.9.8
+    command: ["-config.file=/etc/loki/local-config.yaml"]
+    ports:
+      - "3100:3100"
+    volumes:
+      - loki-data:/loki
+    restart: unless-stopped
+
+  tempo:
+    image: grafana/tempo:2.5.0
+    command: ["-config.file=/etc/tempo/config.yaml"]
+    ports:
+      - "3200:3200"   # tempo query
+    volumes:
+      - tempo-data:/tmp/tempo
+    restart: unless-stopped
+
+  otel-collector:
+    image: otel/opentelemetry-collector:0.99.0
+    depends_on:
+      - loki
+      - tempo
+    command: ["--config=/etc/otelcol/config.yaml"]
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+    volumes:
+      - ./otel-collector.yaml:/etc/otelcol/config.yaml:ro
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:10.4.3
+    depends_on:
+      - loki
+      - tempo
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_FEATURE_TOGGLES_ENABLE: traceqlEditor
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/provisioning/dashboards:/var/lib/grafana/dashboards:ro
+      - ./rules:/etc/grafana/provisioning/alerting:ro
+      - ./freshness_sli.json:/var/lib/grafana/freshness/freshness_sli.json:ro
+    restart: unless-stopped
+
+volumes:
+  loki-data:
+  tempo-data:
