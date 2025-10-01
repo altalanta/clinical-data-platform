@@ -8,3 +8,6 @@ clean-targets: ["target"]
 models:
   clinical_data_platform_demo:
     +materialized: table
+    public_cdm:
+      +materialized: table
+      +schema: "{{ 'public_cdm' if var('adapter', 'default') == 'public_cdm' else target.schema }}"

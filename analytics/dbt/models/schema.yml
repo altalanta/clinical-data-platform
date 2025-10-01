@@ -1,0 +1,208 @@
+version: 2
+
+sources:
+  - name: clinical_raw
+    description: "Raw clinical data from various sources"
+    tables:
+      - name: subjects_raw
+        description: "Raw subject demographic data"
+        columns:
+          - name: subject_id
+            description: "Unique subject identifier"
+            tests:
+              - not_null
+              - unique
+          - name: study_id
+            description: "Study identifier"
+            tests:
+              - not_null
+          - name: enrollment_date
+            description: "Date of subject enrollment"
+            tests:
+              - not_null
+
+models:
+  - name: stg_patients
+    description: "Staged patient data with cleaned demographics"
+    columns:
+      - name: patient_id
+        description: "Unique patient identifier"
+        tests:
+          - not_null
+          - unique
+      - name: birth_date
+        description: "Patient birth date"
+        tests:
+          - not_null
+      - name: gender
+        description: "Patient gender"
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['M', 'F', 'U', 'O']
+              quote: false
+
+  - name: stg_visits
+    description: "Staged visit data with cleaned visit information"
+    columns:
+      - name: visit_id
+        description: "Unique visit identifier"
+        tests:
+          - not_null
+          - unique
+      - name: patient_id
+        description: "Foreign key to patient"
+        tests:
+          - not_null
+          - relationships:
+              to: ref('stg_patients')
+              field: patient_id
+      - name: visit_date
+        description: "Date of visit"
+        tests:
+          - not_null
+          - dbt_utils.recency:
+              datepart: day
+              interval: 365
+              ignore_time_component: true
+
+  - name: stg_providers
+    description: "Staged provider data"
+    columns:
+      - name: provider_id
+        description: "Unique provider identifier"
+        tests:
+          - not_null
+          - unique
+      - name: provider_type
+        description: "Type of healthcare provider"
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['physician', 'nurse', 'specialist', 'other']
+
+  - name: dim_patients
+    description: "Patient dimension table for analytics"
+    tests:
+      - dbt_utils.not_null_proportion:
+          at_least: 0.95
+    columns:
+      - name: patient_id
+        description: "Primary key - unique patient identifier"
+        tests:
+          - not_null
+          - unique
+      - name: age_at_enrollment
+        description: "Patient age at enrollment"
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 120
+      - name: gender
+        description: "Patient gender"
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['M', 'F', 'U', 'O']
+              quote: false
+      - name: enrollment_status
+        description: "Current enrollment status"
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['active', 'completed', 'withdrawn', 'deceased']
+
+  - name: dim_providers
+    description: "Provider dimension table"
+    columns:
+      - name: provider_id
+        description: "Primary key - unique provider identifier"
+        tests:
+          - not_null
+          - unique
+      - name: specialty
+        description: "Provider specialty"
+        tests:
+          - not_null
+
+  - name: fact_visits
+    description: "Visit fact table with comprehensive validation"
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [patient_id, visit_date, provider_id]
+      - dbt_utils.not_null_proportion:
+          at_least: 0.99
+    columns:
+      - name: visit_id
+        description: "Primary key - unique visit identifier"
+        tests:
+          - not_null
+          - unique
+      - name: patient_id
+        description: "Foreign key to patient dimension"
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_patients')
+              field: patient_id
+      - name: provider_id
+        description: "Foreign key to provider dimension"
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_providers')
+              field: provider_id
+      - name: visit_date
+        description: "Date of visit - critical for freshness"
+        tests:
+          - not_null
+          - dbt_utils.recency:
+              datepart: day
+              interval: 30
+              ignore_time_component: true
+      - name: visit_type
+        description: "Type of visit"
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['initial', 'followup', 'emergency', 'consultation']
+      - name: duration_minutes
+        description: "Visit duration in minutes"
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 1
+              max_value: 480  # 8 hours max
+      - name: total_cost
+        description: "Total visit cost"
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 50000
+
+exposures:
+  - name: clinical_dashboard
+    type: dashboard
+    maturity: high
+    url: http://localhost:8501
+    description: "Main clinical data dashboard for stakeholders"
+    depends_on:
+      - ref('fact_visits')
+      - ref('dim_patients')
+      - ref('dim_providers')
+    owner:
+      name: Clinical Data Team
+      email: clinical-data@example.com
+
+  - name: ml_risk_model
+    type: ml
+    maturity: medium
+    description: "Patient risk scoring ML model"
+    depends_on:
+      - ref('fact_visits')
+      - ref('dim_patients')
+    owner:
+      name: ML Engineering Team
+      email: ml-eng@example.com
