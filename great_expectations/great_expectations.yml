@@ -1,25 +1,123 @@
 config_version: 3
-datasources: {}
+
+datasources:
+  clinical_data_source:
+    class_name: Datasource
+    execution_engine:
+      class_name: PandasExecutionEngine
+    data_connectors:
+      default_inferred_data_connector:
+        class_name: InferredAssetFilesystemDataConnector
+        base_directory: ../data/
+        default_regex:
+          group_names:
+            - data_asset_name
+          pattern: (.*)\.csv
+
 stores:
   expectations_store:
     class_name: ExpectationsStore
     store_backend:
-      class_name: InMemoryStoreBackend
+      class_name: TupleFilesystemStoreBackend
+      base_directory: expectations/
+      platform_specific_separator: false
+
   validations_store:
     class_name: ValidationsStore
     store_backend:
-      class_name: InMemoryStoreBackend
+      class_name: TupleFilesystemStoreBackend
+      base_directory: uncommitted/validations/
+      platform_specific_separator: false
+
   evaluation_parameter_store:
     class_name: EvaluationParameterStore
+    store_backend:
+      class_name: InMemoryStoreBackend
+
   checkpoint_store:
     class_name: CheckpointStore
     store_backend:
-      class_name: InMemoryStoreBackend
+      class_name: TupleFilesystemStoreBackend
+      base_directory: checkpoints/
+      platform_specific_separator: false
+
+  profiler_store:
+    class_name: ProfilerStore
+    store_backend:
+      class_name: TupleFilesystemStoreBackend
+      base_directory: profilers/
+
 expectations_store_name: expectations_store
 validations_store_name: validations_store
 evaluation_parameter_store_name: evaluation_parameter_store
 checkpoint_store_name: checkpoint_store
+profiler_store_name: profiler_store
+
+data_docs_sites:
+  local_site:
+    class_name: SiteBuilder
+    show_how_to_buttons: true
+    store_backend:
+      class_name: TupleFilesystemStoreBackend
+      base_directory: uncommitted/data_docs/local_site/
+      platform_specific_separator: false
+    site_index_builder:
+      class_name: DefaultSiteIndexBuilder
+
+  # Cloud storage for production audit trails
+  s3_site:
+    class_name: SiteBuilder
+    show_how_to_buttons: false
+    store_backend:
+      class_name: TupleS3StoreBackend
+      bucket: ${GE_S3_BUCKET:-clinical-ge-docs}
+      prefix: data_docs/
+      region_name: ${AWS_REGION:-us-east-1}
+    site_index_builder:
+      class_name: DefaultSiteIndexBuilder
+
+# Compliance and audit settings
+validation_operators:
+  action_list_operator:
+    class_name: ActionListValidationOperator
+    action_list:
+      - name: store_validation_result
+        action:
+          class_name: StoreValidationResultAction
+      - name: store_evaluation_params
+        action:
+          class_name: StoreEvaluationParametersAction
+      - name: update_data_docs
+        action:
+          class_name: UpdateDataDocsAction
+          site_names:
+            - local_site
+      - name: send_slack_notification_on_validation_result
+        action:
+          class_name: SlackNotificationAction
+          slack_webhook: ${SLACK_WEBHOOK_URL}
+          notify_on: failure
+          notify_with: all
+          renderer:
+            module_name: great_expectations.render.renderer.slack_renderer
+            class_name: SlackRenderer
+
+# Security and compliance
 plugins_directory: plugins/
-data_docs_sites: {}
+config_variables_file_path: uncommitted/config_variables.yml
+
 anonymous_usage_statistics:
   enabled: false
+  data_context_id: clinical-data-platform-${ENV:-local}
+  usage_statistics_url: null  # Disable telemetry for clinical compliance
+
+# Runtime configuration
+concurrency:
+  enabled: true
+  thread_count: 4
+
+# Progress bars for long-running validations
+progress_bars:
+  enabled: true
+  module_name: great_expectations.core.usage_statistics.usage_statistics
+  class_name: TqdmProgressBarManager

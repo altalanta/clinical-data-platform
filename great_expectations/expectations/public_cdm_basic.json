@@ -1,0 +1,84 @@
+{
+  "data_asset_type": null,
+  "expectation_suite_name": "public_cdm_basic",
+  "expectations": [
+    {
+      "expectation_type": "expect_table_row_count_to_be_between",
+      "kwargs": {
+        "min_value": 100,
+        "max_value": 10000
+      },
+      "meta": {
+        "notes": {
+          "format": "markdown",
+          "content": "Ensure we have a reasonable number of synthetic patients for demo purposes"
+        }
+      }
+    },
+    {
+      "expectation_type": "expect_column_to_exist",
+      "kwargs": {
+        "column": "person_id"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_not_be_null",
+      "kwargs": {
+        "column": "person_id"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_unique",
+      "kwargs": {
+        "column": "person_id"
+      }
+    },
+    {
+      "expectation_type": "expect_column_to_exist", 
+      "kwargs": {
+        "column": "year_of_birth"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_between",
+      "kwargs": {
+        "column": "year_of_birth",
+        "min_value": 1900,
+        "max_value": 2024
+      },
+      "meta": {
+        "notes": {
+          "format": "markdown",
+          "content": "Birth years should be realistic for demo purposes"
+        }
+      }
+    },
+    {
+      "expectation_type": "expect_column_to_exist",
+      "kwargs": {
+        "column": "gender_concept_id"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_in_set",
+      "kwargs": {
+        "column": "gender_concept_id", 
+        "value_set": [8507, 8532, 8551, 0]
+      },
+      "meta": {
+        "notes": {
+          "format": "markdown",
+          "content": "Gender concepts should follow OMOP standard concepts: 8507=MALE, 8532=FEMALE, 8551=UNKNOWN, 0=NO_MATCHING_CONCEPT"
+        }
+      }
+    }
+  ],
+  "ge_cloud_id": null,
+  "meta": {
+    "great_expectations_version": "0.18.0",
+    "notes": {
+      "format": "markdown",
+      "content": "Basic validation suite for synthetic public CDM person table. Ensures data follows OMOP CDM patterns and has reasonable distributions for demo purposes."
+    }
+  }
+}

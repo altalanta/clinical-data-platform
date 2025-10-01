@@ -15,6 +15,29 @@ Local-first clinical data platform: ingest → transform (dbt/DuckDB) → valida
 - **Container:** `ghcr.io/altalanta/clinical-data-platform`
 - **Pre-commit:** `pip install pre-commit && pre-commit install`
 
+## 🚀 One-click Demo
+
+Try the platform instantly with **synthetic data** (no PHI, fully offline):
+
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/altalanta/clinical-data-platform?quickstart=1)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/altalanta/clinical-data-platform/blob/main/notebooks/public_demo_quickstart.ipynb)
+
+**Quick local setup:**
+```bash
+git clone https://github.com/altalanta/clinical-data-platform.git
+cd clinical-data-platform
+make fetch-public
+make demo-public
+open artifacts/public_demo/README.md
+```
+
+**What you get:**
+- 🎲 Synthetic OMOP CDM data (persons, visits, conditions, measurements)
+- ✅ Data quality validation with Great Expectations + Pandera  
+- 📊 Analytics-ready dbt transformations in DuckDB
+- 📋 Comprehensive data docs and quality reports
+- 🔒 Zero PHI - safe for public demos and development
+
 ## GxP/HIPAA Read-Only Mode
 
 This repo includes a **read-only mode** and **PHI-safe logging**:
