@@ -32,14 +32,22 @@ setup_telemetry(
     scrub_logs=settings.log_scrub_values
 )
 
-# CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"] if settings.environment == "dev" else ["https://*.clinical-platform.com"],
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE"],
-    allow_headers=["*"],
-)
+# CORS middleware - secure configuration with validation
+try:
+    cors_origins = settings.get_cors_origins()
+    cors_methods = settings.get_cors_methods()
+    cors_headers = settings.get_cors_headers()
+    
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=cors_origins,
+        allow_credentials=settings.cors_allow_credentials,
+        allow_methods=cors_methods,
+        allow_headers=cors_headers,
+    )
+except ValueError as e:
+    # Fail fast on invalid CORS configuration
+    raise RuntimeError(f"Invalid CORS configuration: {e}") from e
 
 # Trusted host middleware for production
 if settings.environment in ["staging", "prod"]:

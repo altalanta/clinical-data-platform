@@ -1,9 +1,11 @@
 """
 JWT Authentication and Authorization module for clinical data platform.
-Implements RBAC with role-based claims.
+Implements RBAC with role-based claims with secure credential management.
 """
 
 import os
+import secrets
+import time
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any
 from enum import Enum
@@ -55,41 +57,59 @@ class Token(BaseModel):
 
 
 class AuthService:
-    """Authentication and authorization service."""
+    """Authentication and authorization service with secure credential management."""
     
     def __init__(self):
-        self.secret_key = os.getenv("JWT_SECRET", "dev-secret-key-change-in-production")
+        self.environment = os.getenv("ENVIRONMENT", "dev")
+        self._validate_jwt_secret()
+        
+        self.secret_key = os.getenv("JWT_SECRET")
         self.algorithm = "HS256"
         self.access_token_expire_minutes = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
         self.pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
         
-        # Mock user database - replace with real database in production
-        self.users_db = {
-            "admin": {
+        # Anti-timing attack configuration
+        self.auth_delay_enabled = os.getenv("AUTH_DELAY_ENABLED", "true").lower() == "true"
+        self.auth_delay_min_ms = int(os.getenv("AUTH_DELAY_MIN_MS", "50"))
+        self.auth_delay_max_ms = int(os.getenv("AUTH_DELAY_MAX_MS", "100"))
+        
+        # User database - load from environment or external store
+        self.users_db = self._load_user_database()
+    
+    def _validate_jwt_secret(self) -> None:
+        """Validate JWT secret is present and secure in production."""
+        jwt_secret = os.getenv("JWT_SECRET")
+        
+        if self.environment in ["prod", "production", "staging"]:
+            if not jwt_secret:
+                raise ValueError(
+                    "JWT_SECRET environment variable is required in production/staging"
+                )
+            if len(jwt_secret) < 32:
+                raise ValueError(
+                    "JWT_SECRET must be at least 32 characters in production/staging"
+                )
+        elif not jwt_secret:
+            # Generate a random secret for development
+            os.environ["JWT_SECRET"] = secrets.token_urlsafe(32)
+    
+    def _load_user_database(self) -> Dict[str, Dict[str, Any]]:
+        """Load user database from environment variables or return empty dict."""
+        # In production, users should be loaded from a secure database
+        # For development, load from environment variables if present
+        users_db = {}
+        
+        # Allow loading a single admin user from environment for bootstrapping
+        admin_hash = os.getenv("ADMIN_PASSWORD_HASH")
+        if admin_hash:
+            users_db["admin"] = {
                 "username": "admin",
-                "email": "admin@clinical-platform.com",
-                "hashed_password": self.get_password_hash("admin123"),
+                "email": os.getenv("ADMIN_EMAIL", "admin@clinical-platform.com"),
+                "hashed_password": admin_hash,
                 "roles": [UserRole.ADMIN]
-            },
-            "analyst": {
-                "username": "analyst",
-                "email": "analyst@clinical-platform.com", 
-                "hashed_password": self.get_password_hash("analyst123"),
-                "roles": [UserRole.ANALYST]
-            },
-            "bi_user": {
-                "username": "bi_user",
-                "email": "bi@clinical-platform.com",
-                "hashed_password": self.get_password_hash("bi123"),
-                "roles": [UserRole.BI_READONLY]
-            },
-            "researcher": {
-                "username": "researcher",
-                "email": "researcher@clinical-platform.com",
-                "hashed_password": self.get_password_hash("researcher123"),
-                "roles": [UserRole.RESEARCHER, UserRole.ANALYST]
             }
-        }
+        
+        return users_db
 
     def verify_password(self, plain_password: str, hashed_password: str) -> bool:
         """Verify a password against its hash."""
@@ -100,13 +120,33 @@ class AuthService:
         return self.pwd_context.hash(password)
 
     def authenticate_user(self, username: str, password: str) -> Optional[Dict[str, Any]]:
-        """Authenticate a user by username and password."""
+        """
+        Authenticate a user by username and password.
+        Uses constant-time operations to prevent timing attacks.
+        """
+        start_time = time.time()
+        
+        # Always retrieve user and perform hash verification to normalize timing
         user = self.users_db.get(username)
-        if not user:
-            return None
-        if not self.verify_password(password, user["hashed_password"]):
-            return None
-        return user
+        
+        if user:
+            # Verify against actual hash
+            password_valid = self.verify_password(password, user["hashed_password"])
+        else:
+            # Perform dummy hash verification to normalize timing
+            dummy_hash = "$2b$12$dummy.hash.to.prevent.timing.attacks.abcdefghijklmnopqr"
+            self.verify_password(password, dummy_hash)
+            password_valid = False
+        
+        # Add random delay to further prevent timing attacks
+        if self.auth_delay_enabled:
+            delay_ms = secrets.randbelow(
+                self.auth_delay_max_ms - self.auth_delay_min_ms + 1
+            ) + self.auth_delay_min_ms
+            time.sleep(delay_ms / 1000.0)
+        
+        # Return user only if both user exists and password is valid
+        return user if (user and password_valid) else None
 
     def create_access_token(self, username: str, roles: List[UserRole]) -> str:
         """Create a JWT access token."""
@@ -155,9 +195,10 @@ class AuthService:
         """Login and return JWT token."""
         user = self.authenticate_user(credentials.username, credentials.password)
         if not user:
+            # Always return the same error message to prevent user enumeration
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Incorrect username or password",
+                detail="Invalid credentials",
                 headers={"WWW-Authenticate": "Bearer"}
             )
         
