@@ -21,8 +21,14 @@ class Settings(BaseSettings):
     log_level: str = os.getenv("LOG_LEVEL", "INFO")
     
     # Security
-    jwt_secret: str = os.getenv("JWT_SECRET", "dev-secret-change-in-production")
+    jwt_secret: str = os.getenv("JWT_SECRET", "")  # No default in production
     access_token_expire_minutes: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
+    
+    # CORS Configuration
+    cors_allow_origins: str = os.getenv("CORS_ALLOW_ORIGINS", "")
+    cors_allow_credentials: bool = os.getenv("CORS_ALLOW_CREDENTIALS", "true").lower() == "true"
+    cors_allow_methods: str = os.getenv("CORS_ALLOW_METHODS", "GET,POST,PUT,DELETE,OPTIONS")
+    cors_allow_headers: str = os.getenv("CORS_ALLOW_HEADERS", "*")
     
     # Read-only mode and compliance
     read_only_mode: bool = os.getenv("READ_ONLY_MODE", "0") == "1"
@@ -66,6 +72,52 @@ class Settings(BaseSettings):
     def is_cloud_environment(self) -> bool:
         """Check if running in cloud environment."""
         return self.environment in ["staging", "prod"] or bool(os.getenv("AWS_EXECUTION_ENV"))
+    
+    @property
+    def is_production_environment(self) -> bool:
+        """Check if running in production or staging."""
+        return self.environment in ["prod", "production", "staging"]
+    
+    def get_cors_origins(self) -> list[str]:
+        """Get CORS origins as a list, with security validation."""
+        if not self.cors_allow_origins:
+            if self.is_production_environment:
+                raise ValueError(
+                    "CORS_ALLOW_ORIGINS must be specified in production/staging. "
+                    "Wildcard '*' is not allowed in production."
+                )
+            # Development default
+            return ["http://localhost:3000", "http://localhost:8000", "http://localhost:8080"]
+        
+        origins = [origin.strip() for origin in self.cors_allow_origins.split(",")]
+        
+        # Validate production CORS settings
+        if self.is_production_environment:
+            if "*" in origins:
+                raise ValueError(
+                    "Wildcard '*' CORS origin is not allowed in production/staging. "
+                    "Specify explicit allowed origins."
+                )
+            
+            # Validate each origin is a proper URL
+            for origin in origins:
+                if not origin.startswith(("https://", "http://localhost", "http://127.0.0.1")):
+                    raise ValueError(
+                        f"Invalid CORS origin '{origin}' in production. "
+                        "Must use HTTPS or localhost for testing."
+                    )
+        
+        return origins
+    
+    def get_cors_methods(self) -> list[str]:
+        """Get CORS methods as a list."""
+        return [method.strip() for method in self.cors_allow_methods.split(",")]
+    
+    def get_cors_headers(self) -> list[str]:
+        """Get CORS headers as a list."""
+        if self.cors_allow_headers == "*":
+            return ["*"]
+        return [header.strip() for header in self.cors_allow_headers.split(",")]
     
     class Config:
         case_sensitive = False
