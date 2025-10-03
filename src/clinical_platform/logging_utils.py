@@ -25,12 +25,23 @@ class PHIFilter(logging.Filter):
         self.scrub_values = scrub_values if scrub_values is not None else bool(os.getenv('LOG_SCRUB_VALUES', '1') == '1')
         self.read_only_mode = read_only_mode if read_only_mode is not None else bool(os.getenv('READ_ONLY_MODE', '0') == '1')
         
-        # PHI/PII patterns to redact
+        # Enhanced PHI/PII patterns to redact
         self.phi_patterns = [
-            r'\b\d{3}-\d{2}-\d{4}\b',  # SSN
-            r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b',  # Email
-            r'\b\d{3}-\d{3}-\d{4}\b',  # Phone
-            r'\b\d{4}-\d{4}-\d{4}-\d{4}\b',  # Credit card
+            re.compile(r'\b\d{3}-\d{2}-\d{4}\b'),  # SSN
+            re.compile(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'),  # Email
+            re.compile(r'\b\d{3}-\d{3}-\d{4}\b'),  # Phone
+            re.compile(r'\b\d{4}-\d{4}-\d{4}-\d{4}\b'),  # Credit card
+            re.compile(r'\b\d{4}-\d{2}-\d{2}\b'),  # ISO date YYYY-MM-DD
+            re.compile(r'\b\d{2}/\d{2}/\d{4}\b'),  # US date MM/DD/YYYY
+            re.compile(r'\b\d{1,2}/\d{1,2}/\d{2,4}\b'),  # Various date formats
+            re.compile(r'\b[A-Z]{2,3}-\d{4,10}\b'),  # MRN-like (e.g., MRN-123456)
+            re.compile(r'\bSUBJ\d{3,8}\b'),  # Subject IDs
+            re.compile(r'\bPT\d{3,8}\b'),  # Patient IDs  
+            re.compile(r'\bSTUDY\d{3,8}\b'),  # Study IDs
+            re.compile(r'\b\d{8,12}\b'),  # Long numeric IDs
+            re.compile(r'\b[A-Z]{1,2}\d{6,10}\b'),  # Alpha-numeric IDs
+            re.compile(r'\b\d{3,4}\s?\d{3,4}\s?\d{4}\b'),  # Phone variations
+            re.compile(r'\b\d{5}(-\d{4})?\b'),  # ZIP codes
         ]
         
         # Sensitive field names
@@ -56,14 +67,24 @@ class PHIFilter(logging.Filter):
         """Redact PHI patterns from message text."""
         redacted = message
         
-        # Apply regex patterns
+        # Apply compiled regex patterns
         for pattern in self.phi_patterns:
-            redacted = re.sub(pattern, '***REDACTED***', redacted)
+            redacted = pattern.sub('[REDACTED]', redacted)
         
         # Redact sensitive field values in key=value patterns
         for field in self.sensitive_fields:
             pattern = rf'\b{field}\s*[=:]\s*[^\s,\]}}]+'
-            redacted = re.sub(pattern, f'{field}=***REDACTED***', redacted, flags=re.IGNORECASE)
+            redacted = re.sub(pattern, f'{field}=[REDACTED]', redacted, flags=re.IGNORECASE)
+        
+        # Additional redaction for common patterns in error messages
+        # File paths that might contain PHI
+        redacted = re.sub(r'/[^/\s]*(?:patient|subject|phi|pii)[^/\s]*[^\s]*', '/[REDACTED_PATH]', redacted, flags=re.IGNORECASE)
+        
+        # Database connection strings
+        redacted = re.sub(r'://[^@]+@[^/]+/', '://[REDACTED]@[REDACTED]/', redacted)
+        
+        # Potential sensitive strings in quotes
+        redacted = re.sub(r'"[^"]*(?:ssn|social|mrn|patient|subject)[^"]*"', '"[REDACTED]"', redacted, flags=re.IGNORECASE)
         
         return redacted
 

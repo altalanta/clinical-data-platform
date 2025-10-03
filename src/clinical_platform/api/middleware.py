@@ -4,17 +4,48 @@ from __future__ import annotations
 
 import time
 import uuid
-from typing import Callable
+from collections import defaultdict, deque
+from typing import Callable, Dict
 
 from fastapi import Request, Response
 from fastapi.middleware.base import BaseHTTPMiddleware
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.responses import JSONResponse
 from starlette.middleware.base import RequestResponseEndpoint
 
+from clinical_platform.config import get_config
 from clinical_platform.logging_utils import get_logger
 
 logger = get_logger("api_middleware")
+
+
+class ReadOnlyModeMiddleware(BaseHTTPMiddleware):
+    """Enforce read-only mode for GxP compliance."""
+    
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
+        config = get_config()
+        
+        if config.security.read_only_mode and request.method in {"POST", "PUT", "PATCH", "DELETE"}:
+            logger.warning(
+                "Read-only mode violation attempted",
+                extra={
+                    "method": request.method,
+                    "path": str(request.url.path),
+                    "client_ip": request.client.host if request.client else "unknown",
+                    "user_agent": request.headers.get("user-agent", "unknown")
+                }
+            )
+            return JSONResponse(
+                status_code=403,
+                content={
+                    "error": "System is in read-only mode. Write operations are forbidden.",
+                    "detail": "This system is currently operating in read-only mode for compliance reasons.",
+                    "allowed_methods": ["GET", "HEAD", "OPTIONS"]
+                }
+            )
+        
+        return await call_next(request)
 
 
 class RequestIDMiddleware(BaseHTTPMiddleware):
@@ -117,13 +148,87 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         return response
 
 
+class RateLimitMiddleware(BaseHTTPMiddleware):
+    """Simple rate limiting middleware."""
+    
+    def __init__(self, app, calls_per_minute: int = 60, write_calls_per_minute: int = 10):
+        super().__init__(app)
+        self.calls_per_minute = calls_per_minute
+        self.write_calls_per_minute = write_calls_per_minute
+        self.call_times: Dict[str, deque] = defaultdict(deque)
+        
+    def _get_client_ip(self, request: Request) -> str:
+        """Get client IP, considering X-Forwarded-For header."""
+        forwarded_for = request.headers.get("X-Forwarded-For")
+        if forwarded_for:
+            return forwarded_for.split(",")[0].strip()
+        return request.client.host if request.client else "unknown"
+    
+    def _is_rate_limited(self, client_ip: str, is_write: bool) -> bool:
+        """Check if client is rate limited."""
+        now = time.time()
+        limit = self.write_calls_per_minute if is_write else self.calls_per_minute
+        
+        # Clean old entries (older than 1 minute)
+        while self.call_times[client_ip] and self.call_times[client_ip][0] < now - 60:
+            self.call_times[client_ip].popleft()
+        
+        # Check if limit exceeded
+        if len(self.call_times[client_ip]) >= limit:
+            return True
+        
+        # Add current request
+        self.call_times[client_ip].append(now)
+        return False
+    
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
+        client_ip = self._get_client_ip(request)
+        is_write = request.method in {"POST", "PUT", "PATCH", "DELETE"}
+        
+        if self._is_rate_limited(client_ip, is_write):
+            limit = self.write_calls_per_minute if is_write else self.calls_per_minute
+            logger.warning(
+                "Rate limit exceeded",
+                extra={
+                    "client_ip": client_ip,
+                    "method": request.method,
+                    "path": str(request.url.path),
+                    "limit": limit,
+                    "is_write": is_write
+                }
+            )
+            return JSONResponse(
+                status_code=429,
+                content={
+                    "error": "Rate limit exceeded",
+                    "detail": f"Maximum {limit} requests per minute exceeded",
+                    "retry_after": 60
+                },
+                headers={"Retry-After": "60"}
+            )
+        
+        return await call_next(request)
+
+
 def configure_cors() -> CORSMiddleware:
     """Configure CORS middleware with secure defaults."""
+    config = get_config()
+    
+    # Default to GET only, expand based on read-only mode
+    allowed_methods = ["GET", "HEAD", "OPTIONS"]
+    if not config.security.read_only_mode:
+        allowed_methods.extend(["POST", "PUT", "PATCH", "DELETE"])
+    
+    # Restrict origins in production
+    allowed_origins = ["http://localhost:3000", "http://localhost:8501"]
+    if config.env in ["staging", "prod"]:
+        allowed_origins = []  # Must be explicitly configured for production
+    
     return CORSMiddleware(
-        allow_origins=["http://localhost:3000", "http://localhost:8501"],  # Streamlit default
+        allow_origins=allowed_origins,
         allow_credentials=True,
-        allow_methods=["GET", "POST", "PUT", "DELETE"],
-        allow_headers=["*"],
+        allow_methods=allowed_methods,
+        allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
         expose_headers=["X-Request-ID", "X-Response-Time"]
     )
 
@@ -163,6 +268,8 @@ def setup_middleware(app) -> None:
     app.add_middleware(SecurityHeadersMiddleware)
     app.add_middleware(RequestLoggingMiddleware)
     app.add_middleware(RequestIDMiddleware)
+    app.add_middleware(RateLimitMiddleware, calls_per_minute=60, write_calls_per_minute=10)
+    app.add_middleware(ReadOnlyModeMiddleware)  # Must be early to block write operations
     app.add_middleware(configure_gzip())
     app.add_middleware(configure_cors())
     

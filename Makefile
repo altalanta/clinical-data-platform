@@ -1,392 +1,396 @@
-# Clinical Data Platform - Makefile
-# Production-ready makefile with cloud and local deployment options
+# =============================================================================
+# Clinical Data Platform - Production-Ready Makefile
+# One-command demo: make demo (≤10 minutes on laptop)
+# =============================================================================
 
-.PHONY: help setup clean test lint security deploy demo-local demo-cloud fetch-public demo-public validate-public clean-public
+# Configuration
+POETRY := poetry
+PY := $(POETRY) run python
+DBT := $(POETRY) run dbt
+DOCKER_COMPOSE := docker-compose
+TF := terraform
 
-# Default environment
-ENVIRONMENT ?= dev
-AWS_REGION ?= us-east-1
-PROJECT_NAME ?= clinical-platform
+# Port configuration (matching README)
+API_PORT := 8000
+UI_PORT := 8501
+MINIO_PORT := 9000
+MINIO_CONSOLE_PORT := 9001
+MLFLOW_PORT := 5000
 
 # Colors for output
 RED := \033[0;31m
 GREEN := \033[0;32m
 YELLOW := \033[0;33m
 BLUE := \033[0;34m
-NC := \033[0m # No Color
+BOLD := \033[1m
+NC := \033[0m
+
+# =============================================================================
+# PHONY TARGETS
+# =============================================================================
+.PHONY: help setup clean test lint typecheck security docs demo
+.PHONY: data minio ingest dbt analytics train api ui
+.PHONY: infra.init infra.plan infra.apply infra.destroy
+.PHONY: validate.good validate.bad api.readonly
+.PHONY: security-smoke run-readonly test-phi-redaction security-tests
+
+# =============================================================================
+# HELP & SETUP
+# =============================================================================
 
 help: ## Show this help message
-	@echo "$(BLUE)Clinical Data Platform - Available Commands$(NC)"
+	@echo "$(BLUE)$(BOLD)Clinical Data Platform - Available Commands$(NC)"
 	@echo ""
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "$(GREEN)%-20s$(NC) %s\n", $$1, $$2}'
+	@echo "$(GREEN)$(BOLD)🚀 ONE-COMMAND DEMO:$(NC)"
+	@echo "  $(YELLOW)make demo$(NC)          Complete end-to-end local demo (≤10 min)"
 	@echo ""
-	@echo "$(YELLOW)Environment Variables:$(NC)"
-	@echo "  ENVIRONMENT=$(ENVIRONMENT)"
-	@echo "  AWS_REGION=$(AWS_REGION)"
-	@echo "  PROJECT_NAME=$(PROJECT_NAME)"
+	@echo "$(GREEN)$(BOLD)📋 QUICK START:$(NC)"
+	@grep -E '^[a-zA-Z_.-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(YELLOW)%-18s$(NC) %s\n", $$1, $$2}'
+	@echo ""
+	@echo "$(GREEN)$(BOLD)🌐 ENDPOINTS (after demo):$(NC)"
+	@echo "  API:       http://localhost:$(API_PORT)"
+	@echo "  Dashboard: http://localhost:$(UI_PORT)"
+	@echo "  MinIO:     http://localhost:$(MINIO_CONSOLE_PORT)"
+	@echo "  MLflow:    http://localhost:$(MLFLOW_PORT)"
+
+setup: ## Set up development environment
+	@echo "$(BLUE)Setting up development environment...$(NC)"
+	@command -v poetry >/dev/null 2>&1 || { echo "$(RED)Poetry not found. Install: https://python-poetry.org/docs/#installation$(NC)"; exit 1; }
+	$(POETRY) install --with dev
+	$(POETRY) run pre-commit install
+	@mkdir -p logs data/sample_raw data/sample_standardized data/analytics mlruns
+	@echo "$(GREEN)✅ Development environment ready!$(NC)"
 
 # =============================================================================
-# SETUP AND DEPENDENCIES
+# ONE-COMMAND DEMO (≤10 minutes)
 # =============================================================================
 
-setup: ## Install pinned dependencies with pip
-	@echo "$(BLUE)Installing dependencies with pip...$(NC)"
-	python -m pip install --upgrade pip
-	pip install -r requirements.txt
-	@echo "$(GREEN)Dependencies installed. Consider \"make setup.poetry\" for the legacy workflow.$(NC)"
+demo: ## 🚀 Run complete end-to-end demo (data→MinIO→ingest→dbt→ML→API+UI)
+	@echo "$(BLUE)$(BOLD)🚀 Starting Clinical Data Platform Demo...$(NC)"
+	@echo "$(YELLOW)⏱️  Expected completion: ≤10 minutes$(NC)"
+	@echo ""
+	@$(MAKE) _demo_step_1_data
+	@$(MAKE) _demo_step_2_infrastructure  
+	@$(MAKE) _demo_step_3_validation
+	@$(MAKE) _demo_step_4_ingestion
+	@$(MAKE) _demo_step_5_warehouse
+	@$(MAKE) _demo_step_6_analytics
+	@$(MAKE) _demo_step_7_ml
+	@$(MAKE) _demo_step_8_services
+	@echo ""
+	@echo "$(GREEN)$(BOLD)🎉 Demo Complete! Services running:$(NC)"
+	@echo "$(GREEN)  ✅ API:       http://localhost:$(API_PORT)$(NC)"
+	@echo "$(GREEN)  ✅ Dashboard: http://localhost:$(UI_PORT)$(NC)"
+	@echo "$(GREEN)  ✅ MinIO:     http://localhost:$(MINIO_CONSOLE_PORT) (admin/password)$(NC)"
+	@echo "$(GREEN)  ✅ MLflow:    http://localhost:$(MLFLOW_PORT)$(NC)"
+	@echo ""
+	@echo "$(YELLOW)Next steps:$(NC)"
+	@echo "  • Test API: curl http://localhost:$(API_PORT)/health"
+	@echo "  • View logs: tail -f logs/clinical_platform.log"
+	@echo "  • Stop services: make clean"
 
-setup.poetry: ## Legacy Poetry-based setup
-	@echo "$(BLUE)Setting up development environment with Poetry...$(NC)"
-	@command -v poetry >/dev/null 2>&1 || { echo "$(RED)Poetry not found. Please install: https://python-poetry.org/docs/#installation$(NC)"; exit 1; }
-	poetry install --with dev
-	poetry run pre-commit install
-	@echo "$(GREEN)Development environment ready!$(NC)"
+_demo_step_1_data:
+	@echo "$(BLUE)📊 Step 1/8: Generating synthetic SDTM-like data...$(NC)"
+	@$(MAKE) data
+	@echo "$(GREEN)✅ Synthetic data generated$(NC)"
 
-clean: ## Clean up generated files and caches
-	@echo "$(BLUE)Cleaning up...$(NC)"
-	find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
-	find . -type f -name "*.pyc" -delete 2>/dev/null || true
-	find . -type d -name ".pytest_cache" -exec rm -rf {} + 2>/dev/null || true
-	find . -type d -name "*.egg-info" -exec rm -rf {} + 2>/dev/null || true
-	rm -rf .coverage htmlcov/ dist/ build/ data/processed reports docs/figures
-	rm -f docs/index.html docs/cp-tox-mini_report.html docs/model_card.md manifests/data_manifest.json
-	rm -f reports/index.html reports/cp-tox-mini_report.html reports/cp-tox-mini_report.md reports/model_card.md reports/model_metrics.json reports/leakage.json reports/ic50_summary.json
-	@echo "$(GREEN)Cleanup complete!$(NC)"
+_demo_step_2_infrastructure:
+	@echo "$(BLUE)🐳 Step 2/8: Starting infrastructure (MinIO + MLflow)...$(NC)"
+	@$(MAKE) minio
+	@$(MAKE) mlflow
+	@echo "$(GREEN)✅ Infrastructure ready$(NC)"
 
-# =============================================================================
-# TESTING AND VALIDATION
-# =============================================================================
+_demo_step_3_validation:
+	@echo "$(BLUE)🔍 Step 3/8: Validating data quality...$(NC)"
+	@$(MAKE) validate.good
+	@echo "$(GREEN)✅ Data validation passed$(NC)"
 
-test: ## Run all tests
-	@echo "$(BLUE)Running tests...$(NC)"
-	poetry run pytest tests/ -v --cov=src/clinical_data_platform --cov-report=html --cov-report=term
+_demo_step_4_ingestion:
+	@echo "$(BLUE)📥 Step 4/8: Running ingestion (land→bronze→silver)...$(NC)"
+	@$(MAKE) ingest
+	@echo "$(GREEN)✅ Data ingested$(NC)"
 
-test.fast: ## Run fast tests only
-	@echo "$(BLUE)Running fast tests...$(NC)"
-	poetry run pytest tests/ -v -m "not slow"
+_demo_step_5_warehouse:
+	@echo "$(BLUE)🏗️  Step 5/8: Building warehouse (dbt models + tests)...$(NC)"
+	@$(MAKE) dbt
+	@echo "$(GREEN)✅ Warehouse built$(NC)"
 
-test.compliance: ## Run compliance and PHI redaction tests
-	@echo "$(BLUE)Running compliance tests...$(NC)"
-	poetry run pytest tests/test_compliance.py tests/test_readonly.py -v
+_demo_step_6_analytics:
+	@echo "$(BLUE)📈 Step 6/8: Running analytics queries...$(NC)"
+	@$(MAKE) analytics
+	@echo "$(GREEN)✅ Analytics complete$(NC)"
 
-lint: ## Run code quality checks
-	@echo "$(BLUE)Running linting...$(NC)"
-	poetry run ruff check src/ tests/
-	poetry run black --check src/ tests/
-	poetry run mypy src/
+_demo_step_7_ml:
+	@echo "$(BLUE)🤖 Step 7/8: Training ML model...$(NC)"
+	@$(MAKE) train
+	@echo "$(GREEN)✅ Model trained$(NC)"
 
-lint.fix: ## Fix linting issues automatically
-	@echo "$(BLUE)Fixing linting issues...$(NC)"
-	poetry run ruff check --fix src/ tests/
-	poetry run black src/ tests/
-
-security: ## Run security analysis
-	@echo "$(BLUE)Running security analysis...$(NC)"
-	poetry run bandit -r src/ -f json -o bandit-report.json
-	poetry run safety check --json --output safety-report.json || true
-	@echo "$(GREEN)Security reports generated: bandit-report.json, safety-report.json$(NC)"
+_demo_step_8_services:
+	@echo "$(BLUE)🌐 Step 8/8: Starting API + Dashboard...$(NC)"
+	@$(MAKE) api &
+	@sleep 3
+	@$(MAKE) ui &
+	@sleep 2
+	@echo "$(GREEN)✅ Services started$(NC)"
 
 # =============================================================================
 # DATA PIPELINE
 # =============================================================================
 
-data.generate: ## Generate synthetic data
+data: ## Generate synthetic SDTM-like CSV data
 	@echo "$(BLUE)Generating synthetic data...$(NC)"
-	poetry run python scripts/generate_synthetic_data.py
-	@echo "$(GREEN)Synthetic data generated in data/$(NC)"
+	$(PY) scripts/generate_synthetic_data.py --out data/sample_raw --rows 500 --seed 42
+	@echo "$(GREEN)✅ Data generated in data/sample_raw/$(NC)"
 
-data.validate: ## Run data validation with Great Expectations
-	@echo "$(BLUE)Running data validation...$(NC)"
-	poetry run great_expectations checkpoint run validate_clinical_data
+minio: ## Start MinIO S3 mock and seed buckets
+	@echo "$(BLUE)Starting MinIO...$(NC)"
+	$(DOCKER_COMPOSE) up -d minio
+	@sleep 3
+	$(PY) scripts/seed_minio.py
+	@echo "$(GREEN)✅ MinIO ready at http://localhost:$(MINIO_CONSOLE_PORT)$(NC)"
 
-validate.bad: ## Test validation with bad data (should fail)
-	@echo "$(BLUE)Testing validation with bad data...$(NC)"
-	python validation/run_validation.py --data analytics/dbt/seeds/visits.csv
+mlflow: ## Start MLflow tracking server
+	@echo "$(BLUE)Starting MLflow...$(NC)"
+	$(DOCKER_COMPOSE) up -d mlflow
+	@sleep 2
+	@echo "$(GREEN)✅ MLflow ready at http://localhost:$(MLFLOW_PORT)$(NC)"
+
+ingest: ## Run ingestion pipeline (land→bronze→silver with lineage)
+	@echo "$(BLUE)Running ingestion pipeline...$(NC)"
+	$(PY) -m clinical_platform.ingestion.flows run-local
+	@echo "$(GREEN)✅ Ingestion complete$(NC)"
+
+dbt: ## Run dbt models and tests (DuckDB backend)
+	@echo "$(BLUE)Running dbt transformations...$(NC)"
+	DBT_PROFILES_DIR=dbt $(DBT) deps --project-dir dbt/clinical_dbt
+	DBT_PROFILES_DIR=dbt $(DBT) build --project-dir dbt/clinical_dbt
+	@echo "$(GREEN)✅ dbt build complete$(NC)"
+
+analytics: ## Run curated analytics queries
+	@echo "$(BLUE)Running analytics...$(NC)"
+	$(PY) -m clinical_platform.analytics.queries --out data/analytics
+	@echo "$(GREEN)✅ Analytics complete$(NC)"
+
+train: ## Train ML model and log to MLflow
+	@echo "$(BLUE)Training ML model...$(NC)"
+	$(PY) -m clinical_platform.ml.train --data data/sample_standardized --out models
+	@echo "$(GREEN)✅ Model training complete$(NC)"
+
+# =============================================================================
+# DATA VALIDATION
+# =============================================================================
 
 validate.good: ## Test validation with good data (should pass)
 	@echo "$(BLUE)Testing validation with good data...$(NC)"
-	python validation/run_validation.py --data analytics/dbt/seeds/visits_good.csv
+	$(PY) -m clinical_platform.validation.runner --data data/sample_raw --output data/validation_good.json
+	@echo "$(GREEN)✅ Validation passed$(NC)"
 
-dbt.run: ## Run dbt models
-	@echo "$(BLUE)Running dbt models...$(NC)"
-	poetry run dbt run --project-dir dbt_project/ --target local
-
-dbt.test: ## Run dbt tests
-	@echo "$(BLUE)Running dbt tests...$(NC)"
-	poetry run dbt test --project-dir dbt_project/ --target local
-
-dbt.docs: ## Generate dbt documentation
-	@echo "$(BLUE)Generating dbt documentation...$(NC)"
-	poetry run dbt docs generate --project-dir dbt_project/ --target local
-	poetry run dbt docs serve --project-dir dbt_project/ --port 8080
-
-pipeline.local: data.generate dbt.run dbt.test data.validate ## Run complete data pipeline locally
-	@echo "$(GREEN)Local data pipeline completed successfully!$(NC)"
+validate.bad: ## Test validation with bad data (should fail)
+	@echo "$(BLUE)Testing validation with bad data (expected to fail)...$(NC)"
+	$(PY) -m clinical_platform.validation.runner --data tests/fixtures/bad_data --output data/validation_bad.json || echo "$(YELLOW)⚠️  Validation failed as expected$(NC)"
 
 # =============================================================================
-# MACHINE LEARNING
+# SERVICES
 # =============================================================================
 
-ml.train: ## Train machine learning models
-	@echo "$(BLUE)Training ML models...$(NC)"
-	poetry run python -m clinical_data_platform.ml.train
+api: ## Run FastAPI server (port 8000)
+	@echo "$(BLUE)Starting API server...$(NC)"
+	$(POETRY) run uvicorn clinical_platform.api.main:app --host 0.0.0.0 --port $(API_PORT) --reload
 
-ml.evaluate: ## Evaluate trained models
-	@echo "$(BLUE)Evaluating ML models...$(NC)"
-	poetry run python -m clinical_data_platform.ml.evaluate
-
-ml.register: ## Register model with MLflow
-	@echo "$(BLUE)Registering model with MLflow...$(NC)"
-	poetry run python -m clinical_data_platform.ml.registry
-
-# =============================================================================
-# API AND SERVICES
-# =============================================================================
-
-api.dev: ## Run API in development mode
-	@echo "$(BLUE)Starting API in development mode...$(NC)"
-	poetry run uvicorn clinical_data_platform.api.main:app --reload --host 0.0.0.0 --port 8000
-
-api.readonly: ## Run API in read-only mode
+api.readonly: ## Run API in read-only mode (GxP/HIPAA compliance)
 	@echo "$(BLUE)Starting API in read-only mode...$(NC)"
-	READ_ONLY_MODE=1 LOG_SCRUB_VALUES=1 poetry run uvicorn clinical_data_platform.api.main:app --host 0.0.0.0 --port 8000
+	READ_ONLY_MODE=1 LOG_SCRUB_VALUES=1 $(POETRY) run uvicorn clinical_platform.api.main:app --host 0.0.0.0 --port $(API_PORT)
 
-ui: ## Run Streamlit dashboard
+ui: ## Run Streamlit dashboard (port 8501)
 	@echo "$(BLUE)Starting Streamlit dashboard...$(NC)"
-	poetry run streamlit run ui/dashboard.py --server.port 8501
+	$(POETRY) run streamlit run src/clinical_platform/ui/dashboard.py --server.port $(UI_PORT)
 
 # =============================================================================
-# DOCKER AND CONTAINERS
+# QUALITY ASSURANCE
 # =============================================================================
 
-docker.build: ## Build all Docker images
+test: ## Run test suite with 85%+ coverage requirement
+	@echo "$(BLUE)Running test suite...$(NC)"
+	$(POETRY) run pytest --cov-fail-under=85 -v
+	@echo "$(GREEN)✅ Tests passed$(NC)"
+
+test.fast: ## Run fast tests only (skip slow/integration tests)
+	$(POETRY) run pytest -m "not slow" -v
+
+security-tests: ## Run security-focused test suite
+	@echo "$(BLUE)Running security tests...$(NC)"
+	$(POETRY) run pytest -v -k "readonly or redaction or auth or cors or ratelimit or phi or security" --tb=short
+	@echo "$(GREEN)✅ Security tests passed$(NC)"
+
+test-phi-redaction: ## Test PHI redaction functionality
+	@echo "$(BLUE)Testing PHI redaction...$(NC)"
+	@$(POETRY) run python -c "\
+import logging; \
+from clinical_platform.logging_utils import PHIFilter, configure_logging; \
+configure_logging(); \
+logger = logging.getLogger('test'); \
+test_messages = [ \
+    'Patient SSN 123-45-6789 accessed', \
+    'Email sent to patient@example.com', \
+    'Subject SUBJ123456 enrolled', \
+    'Phone number 555-123-4567 on file', \
+    'DOB: 1985-03-15', \
+    'MRN-7890123 scheduled' \
+]; \
+print('Testing PHI redaction patterns...'); \
+phi_filter = PHIFilter(scrub_values=True); \
+for msg in test_messages: \
+    redacted = phi_filter._redact_phi_from_message(msg); \
+    if '[REDACTED]' not in redacted: \
+        print(f'❌ Failed to redact: {msg}'); \
+        exit(1); \
+    else: \
+        print(f'✅ Redacted: {msg[:30]}...'); \
+print('✅ All PHI patterns properly redacted'); \
+"
+	@echo "$(GREEN)✅ PHI redaction test passed$(NC)"
+
+run-readonly: ## Start API in read-only mode for testing
+	@echo "$(BLUE)Starting API in read-only mode (test configuration)...$(NC)"
+	@echo "$(YELLOW)Use Ctrl+C to stop$(NC)"
+	READ_ONLY_MODE=1 API_KEY=test-security-key LOG_SCRUB_VALUES=1 \
+	$(POETRY) run uvicorn clinical_platform.api.main:app --host 127.0.0.1 --port $(API_PORT)
+
+security-smoke: ## Run comprehensive security smoke tests
+	@echo "$(BLUE)Running security smoke tests...$(NC)"
+	@echo "$(YELLOW)Starting API in read-only mode...$(NC)"
+	@READ_ONLY_MODE=1 API_KEY=test-security-key LOG_SCRUB_VALUES=1 \
+	$(POETRY) run uvicorn clinical_platform.api.main:app --host 127.0.0.1 --port 8002 --access-log & \
+	api_pid=$$!; \
+	sleep 3; \
+	echo "$(BLUE)Testing read-only enforcement...$(NC)"; \
+	for method in POST PUT PATCH DELETE; do \
+		echo "Testing $$method method..."; \
+		response_code=$$(curl -s -o /dev/null -w "%{http_code}" \
+			-X $$method \
+			-H "Authorization: Bearer test-security-key" \
+			-H "Content-Type: application/json" \
+			-d '{"test": "data"}' \
+			http://127.0.0.1:8002/score 2>/dev/null || echo "000"); \
+		if [ "$$response_code" != "403" ]; then \
+			echo "$(RED)❌ $$method should return 403, got $$response_code$(NC)"; \
+			kill $$api_pid 2>/dev/null || true; \
+			exit 1; \
+		fi; \
+		echo "$(GREEN)✅ $$method correctly blocked$(NC)"; \
+	done; \
+	echo "$(BLUE)Testing authentication enforcement...$(NC)"; \
+	auth_response=$$(curl -s -o /dev/null -w "%{http_code}" \
+		http://127.0.0.1:8002/studies 2>/dev/null || echo "000"); \
+	if [ "$$auth_response" != "401" ]; then \
+		echo "$(RED)❌ Should require auth, got $$auth_response$(NC)"; \
+		kill $$api_pid 2>/dev/null || true; \
+		exit 1; \
+	fi; \
+	echo "$(GREEN)✅ Authentication properly enforced$(NC)"; \
+	echo "$(BLUE)Testing health endpoint...$(NC)"; \
+	health_response=$$(curl -s -o /dev/null -w "%{http_code}" \
+		http://127.0.0.1:8002/health 2>/dev/null || echo "000"); \
+	if [ "$$health_response" != "200" ]; then \
+		echo "$(RED)❌ Health endpoint failed, got $$health_response$(NC)"; \
+		kill $$api_pid 2>/dev/null || true; \
+		exit 1; \
+	fi; \
+	echo "$(GREEN)✅ Health endpoint works$(NC)"; \
+	kill $$api_pid 2>/dev/null || true; \
+	echo "$(GREEN)🔒 All security smoke tests passed!$(NC)"
+
+test.compliance: ## Run compliance and PHI redaction tests
+	$(POETRY) run pytest tests/test_security.py tests/test_compliance.py -v
+
+lint: ## Run linting (ruff + black)
+	@echo "$(BLUE)Running linting...$(NC)"
+	$(POETRY) run ruff check src/ tests/
+	$(POETRY) run black --check src/ tests/
+	@echo "$(GREEN)✅ Linting passed$(NC)"
+
+lint.fix: ## Fix linting issues automatically
+	$(POETRY) run ruff check --fix src/ tests/
+	$(POETRY) run black src/ tests/
+
+typecheck: ## Run type checking (mypy)
+	@echo "$(BLUE)Running type checks...$(NC)"
+	$(POETRY) run mypy src/
+	@echo "$(GREEN)✅ Type checking passed$(NC)"
+
+security: ## Run security analysis (bandit + safety)
+	@echo "$(BLUE)Running security analysis...$(NC)"
+	$(POETRY) run bandit -r src/ -f json -o security-report.json
+	$(POETRY) run safety check --json --output safety-report.json || true
+	@echo "$(GREEN)✅ Security analysis complete$(NC)"
+
+# =============================================================================
+# DOCUMENTATION
+# =============================================================================
+
+docs: ## Generate and serve documentation (MkDocs)
+	@echo "$(BLUE)Starting documentation server...$(NC)"
+	$(POETRY) run mkdocs serve --dev-addr 0.0.0.0:8002
+
+docs.build: ## Build documentation for deployment
+	$(POETRY) run mkdocs build
+
+# =============================================================================
+# DOCKER & CONTAINERS
+# =============================================================================
+
+docker.build: ## Build Docker images
 	@echo "$(BLUE)Building Docker images...$(NC)"
-	docker build -f docker/api.Dockerfile -t clinical-platform-api:latest .
-	docker build -f docker/dbt.Dockerfile -t clinical-platform-dbt:latest .
-	docker build -f docker/worker.Dockerfile -t clinical-platform-worker:latest .
-	@echo "$(GREEN)Docker images built successfully!$(NC)"
+	docker build -t clinical-platform:latest .
+	@echo "$(GREEN)✅ Docker images built$(NC)"
 
-docker.run.api: ## Run API in Docker container
-	@echo "$(BLUE)Running API in Docker...$(NC)"
-	docker run -p 8000:8000 --env-file .env clinical-platform-api:latest
+docker.up: ## Start all services with Docker Compose
+	$(DOCKER_COMPOSE) up -d
+
+docker.down: ## Stop all services
+	$(DOCKER_COMPOSE) down
 
 # =============================================================================
-# CLOUD INFRASTRUCTURE
+# INFRASTRUCTURE (AWS)
 # =============================================================================
 
 infra.init: ## Initialize Terraform
-	@echo "$(BLUE)Initializing Terraform...$(NC)"
-	cd infra/terraform && terraform init
+	cd infra/terraform && $(TF) init
 
 infra.plan: ## Plan Terraform changes
-	@echo "$(BLUE)Planning Terraform changes...$(NC)"
-	cd infra/terraform && terraform plan \
-		-var="environment=$(ENVIRONMENT)" \
-		-var="project_name=$(PROJECT_NAME)" \
-		-var="aws_region=$(AWS_REGION)"
+	cd infra/terraform && $(TF) plan
 
 infra.apply: ## Apply Terraform changes
-	@echo "$(BLUE)Applying Terraform changes...$(NC)"
-	cd infra/terraform && terraform apply \
-		-var="environment=$(ENVIRONMENT)" \
-		-var="project_name=$(PROJECT_NAME)" \
-		-var="aws_region=$(AWS_REGION)"
+	cd infra/terraform && $(TF) apply
 
 infra.destroy: ## Destroy Terraform infrastructure
-	@echo "$(RED)Destroying Terraform infrastructure...$(NC)"
-	@read -p "Are you sure you want to destroy the infrastructure? (yes/no): " confirm && [ "$$confirm" = "yes" ]
-	cd infra/terraform && terraform destroy \
-		-var="environment=$(ENVIRONMENT)" \
-		-var="project_name=$(PROJECT_NAME)" \
-		-var="aws_region=$(AWS_REGION)"
-
-secrets.bootstrap: ## Bootstrap cloud secrets
-	@echo "$(BLUE)Bootstrapping cloud secrets...$(NC)"
-	@command -v aws >/dev/null 2>&1 || { echo "$(RED)AWS CLI not found. Please install and configure.$(NC)"; exit 1; }
-	chmod +x scripts/bootstrap_cloud.sh
-	./scripts/bootstrap_cloud.sh $(ENVIRONMENT)
+	cd infra/terraform && $(TF) destroy
 
 # =============================================================================
-# DEMO WORKFLOWS (Legacy compatibility)
+# MAINTENANCE
 # =============================================================================
 
-demo: demo.dbt demo.schema demo.ml demo.api demo.gif ## Run complete demo (legacy)
-	@echo "Demo artifacts in docs/assets/demo/"
+clean: ## Clean up containers, logs, and temporary files
+	@echo "$(BLUE)Cleaning up...$(NC)"
+	$(DOCKER_COMPOSE) down -v --remove-orphans
+	docker system prune -f
+	rm -rf logs/*.log data/warehouse.duckdb mlruns/ .pytest_cache/ .coverage htmlcov/
+	find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+	@echo "$(GREEN)✅ Cleanup complete$(NC)"
 
-demo.dbt: ## Generate dbt demo artifacts
-	python scripts/run_dbt_and_capture.py
-
-demo.schema: ## Generate schema diagram
-	python scripts/generate_star_schema_diagram.py
-
-demo.ml: ## Run ML demo
-	python -m pip install 'mlflow>=2.15' 'scikit-learn>=1.5' 'matplotlib>=3.8'
-	python scripts/run_demo_mlflow.py
-
-demo.api: ## Exercise API and capture outputs
-	python -m pip install 'fastapi>=0.111' 'uvicorn>=0.30' 'httpx>=0.27'
-	python scripts/exercise_api_and_capture.py
-
-demo.gif: ## Create demo GIF
-	python -m pip install pillow imageio
-	python scripts/make_demo_gif.py
-
-demo.clean: ## Clean demo artifacts
-	rm -rf data/demo.duckdb mlruns
-	rm -rf docs/assets/demo/*
-
-# =============================================================================
-# DEMO WORKFLOWS (New cloud-ready)
-# =============================================================================
-
-demo-local: setup data.generate dbt.run ml.train ## Run complete local demo
-	@echo "$(GREEN)Starting local demo...$(NC)"
-	@echo "$(BLUE)1. Generated synthetic data$(NC)"
-	@echo "$(BLUE)2. Ran dbt transformations$(NC)"
-	@echo "$(BLUE)3. Trained ML models$(NC)"
+status: ## Check system status and health
+	@echo "$(BLUE)$(BOLD)System Status$(NC)"
 	@echo ""
-	@echo "$(GREEN)Demo ready! Start services:$(NC)"
-	@echo "  make api.dev    # API on http://localhost:8000"
-	@echo "  make ui         # Dashboard on http://localhost:8501"
+	@echo "$(YELLOW)Dependencies:$(NC)"
+	@command -v poetry >/dev/null 2>&1 && echo "  ✅ Poetry" || echo "  ❌ Poetry"
+	@command -v docker >/dev/null 2>&1 && echo "  ✅ Docker" || echo "  ❌ Docker"
 	@echo ""
-
-demo-cloud: secrets.bootstrap infra.apply docker.build ## Deploy complete cloud demo
-	@echo "$(GREEN)Cloud demo deployment initiated!$(NC)"
-	@echo ""
-	@echo "$(BLUE)Next steps:$(NC)"
-	@echo "1. Push code to main branch to trigger GitHub Actions"
-	@echo "2. Monitor deployment in GitHub Actions"
-	@echo "3. Access API at: $$(cd infra/terraform && terraform output -raw api_url 2>/dev/null || echo 'Run terraform apply first')"
-	@echo ""
-
-# =============================================================================
-# MAINTENANCE AND UTILITIES
-# =============================================================================
-
-logs.api: ## View API logs (cloud)
-	@echo "$(BLUE)Viewing API logs...$(NC)"
-	aws logs tail /ecs/$(PROJECT_NAME)-$(ENVIRONMENT) --follow --filter-pattern="api"
-
-logs.dbt: ## View dbt logs (cloud)
-	@echo "$(BLUE)Viewing dbt logs...$(NC)"
-	aws logs tail /ecs/$(PROJECT_NAME)-$(ENVIRONMENT) --follow --filter-pattern="dbt"
-
-status: ## Check system status
-	@echo "$(BLUE)System Status Check$(NC)"
-	@echo ""
-	@echo "$(YELLOW)Local Environment:$(NC)"
-	@command -v poetry >/dev/null 2>&1 && echo "✅ Poetry installed" || echo "❌ Poetry not found"
-	@command -v docker >/dev/null 2>&1 && echo "✅ Docker installed" || echo "❌ Docker not found"
-	@command -v aws >/dev/null 2>&1 && echo "✅ AWS CLI installed" || echo "❌ AWS CLI not found"
-	@command -v terraform >/dev/null 2>&1 && echo "✅ Terraform installed" || echo "❌ Terraform not found"
-	@echo ""
-	@echo "$(YELLOW)Data:$(NC)"
-	@[ -d "data/raw" ] && echo "✅ Raw data exists" || echo "❌ No raw data found"
-	@[ -d "data/silver" ] && echo "✅ Silver data exists" || echo "❌ No silver data found"
-	@[ -d "data/gold" ] && echo "✅ Gold data exists" || echo "❌ No gold data found"
-	@echo ""
-	@echo "$(YELLOW)Infrastructure:$(NC)"
-	@[ -f "infra/terraform/terraform.tfstate" ] && echo "✅ Terraform state exists" || echo "❌ No Terraform state found"
-	@echo ""
-
-docs: ## Generate and serve documentation
-	@echo "$(BLUE)Generating documentation...$(NC)"
-	poetry run mkdocs serve --dev-addr 0.0.0.0:8002
-
-
-# =============================================================================
-# CP-TOX MINI PIPELINE
-# =============================================================================
-
-.PHONY: data features fuse train eval diagnostics ic50 report
-
-data: ## Download deterministic CP tox inputs
-	python -m cp_tox_mini.cli download
-
-features: ## Build CP + chem features
-	python -m cp_tox_mini.cli features
-
-fuse: ## Fuse modalities and create train/test splits
-	python -m cp_tox_mini.cli fuse
-
-train: ## Train the CP tox baseline model
-	python -m cp_tox_mini.cli train
-
-# Retain eval verb to align with CLI naming conventions
-eval: ## Evaluate the CP tox model and emit metrics/figures
-	python -m cp_tox_mini.cli eval
-
-diagnostics: ## Run leakage probes and permutation diagnostics
-	python -m cp_tox_mini.cli diagnostics
-
-ic50: ## Estimate IC50 on the example dose-response curve
-	python -m cp_tox_mini.cli ic50
-
-report: ## Build Markdown/HTML reports and publish to docs/
-	python -m cp_tox_mini.cli report
-
-# =============================================================================
-# SHORTCUTS AND ALIASES
-# =============================================================================
-
-dev: api.dev ## Alias for api.dev
-build: docker.build ## Alias for docker.build
-deploy: demo-cloud ## Alias for demo-cloud
-local: demo-local ## Alias for demo-local
-
-# =============================================================================
-# VALIDATION TARGETS
-# =============================================================================
-
-check: lint test security ## Run all checks (lint, test, security)
-	@echo "$(GREEN)All checks passed!$(NC)"
-
-ci: check data.validate ## Run CI pipeline locally
-	@echo "$(GREEN)CI pipeline completed successfully!$(NC)"
+	@echo "$(YELLOW)Services:$(NC)"
+	@curl -s http://localhost:$(API_PORT)/health >/dev/null 2>&1 && echo "  ✅ API ($(API_PORT))" || echo "  ❌ API ($(API_PORT))"
+	@curl -s http://localhost:$(UI_PORT) >/dev/null 2>&1 && echo "  ✅ UI ($(UI_PORT))" || echo "  ❌ UI ($(UI_PORT))"
+	@curl -s http://localhost:$(MINIO_PORT)/minio/health/live >/dev/null 2>&1 && echo "  ✅ MinIO ($(MINIO_PORT))" || echo "  ❌ MinIO ($(MINIO_PORT))"
+	@curl -s http://localhost:$(MLFLOW_PORT) >/dev/null 2>&1 && echo "  ✅ MLflow ($(MLFLOW_PORT))" || echo "  ❌ MLflow ($(MLFLOW_PORT))"
 
 # Default target
-all: ## Run the deterministic CP tox mini pipeline
-	python -m cp_tox_mini.cli all
+.DEFAULT_GOAL := help
 
-.PHONY: obsv.up obsv.down obsv.status obsv.demo
-
-obsv.up: ## Start local observability stack (Grafana, Loki, Tempo, OTel collector)
-	docker compose -f observability/docker-compose.obsv.yml up -d
-
-obsv.down: ## Stop observability stack and remove volumes
-	docker compose -f observability/docker-compose.obsv.yml down -v
-
-obsv.status: ## Show observability stack status
-	docker compose -f observability/docker-compose.obsv.yml ps
-
-obsv.demo: ## Run instrumented demo pipelines and emit freshness SLI
-	python -m src.pipelines.ingest_demo
-	python -m src.pipelines.dbt_demo
-	python -m src.pipelines.train_demo
-	python -m src.common.freshness --path data/silver/_last_update.txt --slo-minutes 120
-
-# =============================================================================
-# PUBLIC DEMO (Synthetic CDM)
-# =============================================================================
-
-.PHONY: fetch-public demo-public validate-public clean-public
-
-fetch-public: ## Generate/fetch synthetic OMOP CDM data for public demo
-	@echo "$(BLUE)Fetching synthetic CDM data...$(NC)"
-	python -m scripts.public_demo_end_to_end --fast --step fetch
-	@echo "$(GREEN)Synthetic data generated in data/public_cdm/$(NC)"
-
-demo-public: ## Run complete public CDM demo pipeline (offline, no PHI)
-	@echo "$(BLUE)Running public CDM demo pipeline...$(NC)"
-	python -m scripts.public_demo_end_to_end --fast
-	@echo "$(GREEN)Demo complete! Check artifacts/public_demo/ for results$(NC)"
-
-validate-public: ## Run data quality checks on synthetic CDM data
-	@echo "$(BLUE)Validating synthetic CDM data...$(NC)"
-	python -m scripts.public_demo_end_to_end --fast --step validate
-	@echo "$(GREEN)Validation complete!$(NC)"
-
-clean-public: ## Clean up public demo artifacts and data
-	@echo "$(BLUE)Cleaning public demo artifacts...$(NC)"
-	rm -rf data/public_cdm artifacts/public_demo *.duckdb
-	@echo "$(GREEN)Public demo cleanup complete!$(NC)"

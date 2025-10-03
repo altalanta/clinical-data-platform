@@ -1,19 +1,21 @@
 from __future__ import annotations
 
+import re
 from typing import List, Optional
 
 import duckdb
-from fastapi import FastAPI, HTTPException, Depends, status
+from fastapi import FastAPI, HTTPException, Depends, status, Path
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from pydantic import BaseModel, Field, validator
 
 from clinical_platform.config import get_config
-from clinical_platform.logging_utils import get_logger
+from clinical_platform.logging_utils import get_logger, PHIFilter
+from .middleware import setup_middleware
 
 logger = get_logger("api")
-security = HTTPBearer()
+security = HTTPBearer(auto_error=False)
 
 app = FastAPI(
     title="Clinical Data Platform API",
@@ -27,28 +29,43 @@ app = FastAPI(
     ]
 )
 
+# Setup all security middleware
+setup_middleware(app)
+
 # Security middleware
 app.add_middleware(
     TrustedHostMiddleware, 
     allowed_hosts=["localhost", "127.0.0.1", "*.clinical-platform.com"]
 )
 
-# CORS - restrictive by default
-config = get_config()
-if config.env == "local":
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["http://localhost:3000", "http://localhost:8501"],
-        allow_credentials=True,
-        allow_methods=["GET", "POST"],
-        allow_headers=["*"],
-    )
+
+def safe_http_exception(status_code: int, detail: str, original_error: Exception = None) -> HTTPException:
+    """Create HTTP exception with PHI-safe error messages."""
+    phi_filter = PHIFilter()
+    safe_detail = phi_filter._redact_phi_from_message(detail)
+    
+    # Log original error for debugging (will be redacted by logging system)
+    if original_error:
+        logger.error(f"API error occurred: {original_error}")
+    
+    # Return sanitized message to client
+    return HTTPException(status_code=status_code, detail=safe_detail)
 
 
 def verify_api_key(credentials: HTTPAuthorizationCredentials = Depends(security)) -> str:
-    """Verify API key from Authorization header."""
+    """Verify API key from Authorization header - REQUIRED for all protected endpoints."""
+    config = get_config()
     expected_key = config.security.api_key
-    if not expected_key or not credentials:
+    
+    # API key is MANDATORY - no bypass allowed
+    if not expected_key:
+        logger.error("API key not configured on server")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Server misconfigured: API key missing",
+        )
+    
+    if not credentials:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="API key required",
@@ -115,19 +132,23 @@ def list_studies(api_key: str = Depends(verify_api_key)):
         logger.info("Studies listed", extra={"study_count": len(studies)})
         return studies
     except Exception as e:
-        logger.error("Failed to list studies", extra={"error": str(e)})
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise safe_http_exception(500, "Database error occurred", e)
 
 
 @app.get("/subjects/{subject_id}", response_model=SubjectResponse, tags=["subjects"])
-def get_subject(subject_id: str, api_key: str = Depends(verify_api_key)):
+def get_subject(
+    subject_id: str = Path(..., regex="^[A-Za-z0-9_-]+$", description="Subject ID (alphanumeric, underscore, hyphen only)"), 
+    api_key: str = Depends(verify_api_key)
+):
     """Get subject information with PII redaction - requires authentication."""
-    if not subject_id.strip():
-        raise HTTPException(status_code=400, detail="Subject ID cannot be empty")
+    # Additional validation beyond Path regex
+    if not subject_id.strip() or len(subject_id) > 50:
+        raise safe_http_exception(400, "Invalid subject ID format", None)
     
     try:
         config = get_config()
         con = duckdb.connect(config.warehouse.duckdb_path)
+        # Parameterized query - already safe
         df = con.execute(
             "SELECT subject_id, study_id, arm FROM stg_subjects WHERE subject_id = ?", 
             [subject_id]
@@ -135,7 +156,7 @@ def get_subject(subject_id: str, api_key: str = Depends(verify_api_key)):
         
         if df.empty:
             logger.warning("Subject not found", extra={"subject_id": "***REDACTED***"})
-            raise HTTPException(status_code=404, detail="Subject not found")
+            raise safe_http_exception(404, "Subject not found", None)
         
         result = df.to_dict(orient="records")[0]
         logger.info("Subject retrieved", extra={"subject_id": "***REDACTED***"})
@@ -144,8 +165,7 @@ def get_subject(subject_id: str, api_key: str = Depends(verify_api_key)):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Failed to retrieve subject", extra={"error": str(e)})
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise safe_http_exception(500, "Database error occurred", e)
 
 
 @app.post("/score", response_model=ScoreResponse, tags=["ml"])
@@ -172,6 +192,5 @@ def score(req: ScoreRequest, api_key: str = Depends(verify_api_key)) -> ScoreRes
         )
         
     except Exception as e:
-        logger.error("Failed to generate score", extra={"error": str(e)})
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise safe_http_exception(500, "Model computation error", e)
 
