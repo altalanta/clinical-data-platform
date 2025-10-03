@@ -21,7 +21,7 @@ class StorageConfig(BaseModel):
     bronze_bucket: str = "clinical-bronze"
     silver_bucket: str = "clinical-silver"
     gold_bucket: str = "clinical-gold"
-    use_ssl: bool = False
+    use_ssl: bool = True  # Default to secure connections
 
 
 class WarehouseConfig(BaseModel):
@@ -50,9 +50,13 @@ class MlflowConfig(BaseModel):
 
 class SecurityConfig(BaseModel):
     api_key: Optional[SecretStr] = None
-    jwt_secret: SecretStr = Field(default="change-in-production-please")
+    jwt_secret: Optional[SecretStr] = None  # No default - must be set explicitly
     enable_pii_redaction: bool = True
     read_only_mode: bool = False
+    
+    def model_post_init(self, __context) -> None:
+        """Validate security configuration after initialization."""
+        super().model_post_init(__context) if hasattr(super(), 'model_post_init') else None
 
 
 class UnifiedConfig(BaseSettings):
@@ -187,7 +191,49 @@ def get_config() -> UnifiedConfig:
         secrets_manager = SecretsManager(region=config.aws_region)
         config = secrets_manager.update_config_from_secrets(config)
     
+    # Validate security configuration
+    _validate_security_config(config)
+    
     return config
+
+
+def _validate_security_config(config: UnifiedConfig) -> None:
+    """Validate security configuration and fail if insecure defaults are used."""
+    if config.env in ["staging", "prod"]:
+        # Production/staging environments must have secure configuration
+        if not config.security.api_key:
+            raise ValueError("API key is required for production/staging environments")
+        
+        if not config.security.jwt_secret:
+            raise ValueError("JWT secret is required for production/staging environments")
+        
+        # Require SSL in production
+        if not config.storage.use_ssl and config.storage.backend != "minio":
+            raise ValueError("SSL must be enabled for production storage connections")
+    
+    # Always check for weak secrets regardless of environment
+    if config.security.jwt_secret:
+        weak_secrets = {
+            "change-in-production-please",
+            "secret",
+            "password", 
+            "admin",
+            "test",
+            "development"
+        }
+        secret_value = config.security.jwt_secret.get_secret_value().lower()
+        if secret_value in weak_secrets or len(secret_value) < 32:
+            if config.env in ["staging", "prod"]:
+                raise ValueError("Weak JWT secret detected in production environment")
+            else:
+                print("WARNING: Weak JWT secret detected. This is only acceptable in development.")
+    
+    # Log security configuration state
+    print(f"Security config validated for environment: {config.env}")
+    print(f"Read-only mode: {config.security.read_only_mode}")
+    print(f"PII redaction: {config.security.enable_pii_redaction}")
+    print(f"SSL enabled: {config.storage.use_ssl}")
+    print(f"API key configured: {bool(config.security.api_key)}")
 
 
 # Legacy compatibility functions
