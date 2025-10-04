@@ -1,0 +1,126 @@
+version: '3.8'
+
+services:
+  # Clinical Data Platform API
+  api:
+    image: ghcr.io/altalanta/clinical-data-platform-api:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    ports:
+      - "8000:8000"
+    environment:
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+      - DATABASE_URL=duckdb:///app/data/clinical.duckdb
+      - LOG_LEVEL=info
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    networks:
+      - clinical-network
+    depends_on:
+      - ingest
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Data Ingestion Service
+  ingest:
+    image: ghcr.io/altalanta/clinical-data-platform-ingest:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.ingest
+    environment:
+      - PYTHONPATH=/app/src
+      - LOG_LEVEL=info
+    volumes:
+      - ./data:/app/data
+      - ./processing:/app/processing
+      - ./logs:/app/logs
+    networks:
+      - clinical-network
+    restart: unless-stopped
+
+  # Analytics and dbt Transformations
+  analytics:
+    image: ghcr.io/altalanta/clinical-data-platform-analytics:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.analytics
+    environment:
+      - PYTHONPATH=/app/src
+      - DBT_PROFILES_DIR=/app/analytics/dbt
+      - DBT_PROJECT_DIR=/app/analytics/dbt
+      - LOG_LEVEL=info
+    volumes:
+      - ./data:/app/data
+      - ./analytics:/app/analytics
+      - ./logs:/app/logs
+    networks:
+      - clinical-network
+    depends_on:
+      - ingest
+    restart: unless-stopped
+
+  # Streamlit Dashboard
+  streamlit:
+    image: ghcr.io/altalanta/clinical-data-platform-streamlit:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.streamlit
+    ports:
+      - "8501:8501"
+    environment:
+      - PYTHONPATH=/app/src
+      - API_BASE_URL=http://api:8000
+    volumes:
+      - ./data:/app/data
+      - ./ui:/app/ui
+    networks:
+      - clinical-network
+    depends_on:
+      - api
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Observability Stack (Optional)
+  observability:
+    image: ghcr.io/altalanta/clinical-data-platform-observability:latest
+    build:
+      context: observability/
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"   # Grafana
+      - "9090:9090"   # Prometheus
+      - "9093:9093"   # AlertManager
+      - "3100:3100"   # Loki
+      - "16686:16686" # Jaeger
+    volumes:
+      - ./observability/data:/app/data
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - clinical-network
+    restart: unless-stopped
+    profiles:
+      - observability
+
+networks:
+  clinical-network:
+    driver: bridge
+    name: clinical-network
+
+volumes:
+  clinical-data:
+    name: clinical-data
+  observability-data:
+    name: observability-data
