@@ -1,0 +1,233 @@
+groups:
+  - name: clinical-platform-api
+    rules:
+      # API Service Health
+      - alert: APIServiceDown
+        expr: up{job="clinical-api"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: api
+        annotations:
+          summary: "Clinical Data Platform API is down"
+          description: "The Clinical Data Platform API has been down for more than 1 minute."
+          runbook_url: "https://docs.clinical-platform.com/runbooks/api-down"
+
+      # High Error Rate
+      - alert: APIHighErrorRate
+        expr: (rate(http_requests_total{job="clinical-api",status=~"5.."}[5m]) / rate(http_requests_total{job="clinical-api"}[5m])) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          service: api
+        annotations:
+          summary: "High error rate on Clinical Data Platform API"
+          description: "API error rate is {{ $value | humanizePercentage }} for the last 5 minutes."
+
+      # High Latency
+      - alert: APIHighLatency
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job="clinical-api"}[5m])) > 2
+        for: 5m
+        labels:
+          severity: warning
+          service: api
+        annotations:
+          summary: "High latency on Clinical Data Platform API"
+          description: "95th percentile latency is {{ $value }}s for the last 5 minutes."
+
+      # High Request Rate
+      - alert: APIHighRequestRate
+        expr: rate(http_requests_total{job="clinical-api"}[5m]) > 100
+        for: 10m
+        labels:
+          severity: warning
+          service: api
+        annotations:
+          summary: "High request rate on Clinical Data Platform API"
+          description: "Request rate is {{ $value }} requests/second for the last 10 minutes."
+
+  - name: clinical-platform-system
+    rules:
+      # High CPU Usage
+      - alert: HighCPUUsage
+        expr: 100 - (avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+          service: system
+        annotations:
+          summary: "High CPU usage detected"
+          description: "CPU usage is {{ $value }}% on instance {{ $labels.instance }}"
+
+      # High Memory Usage
+      - alert: HighMemoryUsage
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 90
+        for: 5m
+        labels:
+          severity: critical
+          service: system
+        annotations:
+          summary: "High memory usage detected"
+          description: "Memory usage is {{ $value }}% on instance {{ $labels.instance }}"
+
+      # Low Disk Space
+      - alert: LowDiskSpace
+        expr: (1 - (node_filesystem_avail_bytes{fstype!="tmpfs"} / node_filesystem_size_bytes{fstype!="tmpfs"})) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+          service: system
+        annotations:
+          summary: "Low disk space detected"
+          description: "Disk usage is {{ $value }}% on {{ $labels.device }} ({{ $labels.instance }})"
+
+  - name: clinical-platform-data
+    rules:
+      # Data Quality Failure
+      - alert: DataQualityFailure
+        expr: data_quality_score < 0.9
+        for: 10m
+        labels:
+          severity: warning
+          service: data-quality
+        annotations:
+          summary: "Data quality score below threshold"
+          description: "Data quality score is {{ $value }} for dataset {{ $labels.dataset }}"
+
+      # Data Freshness Issue
+      - alert: DataFreshnessIssue
+        expr: (time() - data_last_updated_timestamp) > 86400  # 24 hours
+        for: 30m
+        labels:
+          severity: warning
+          service: data-pipeline
+        annotations:
+          summary: "Data freshness issue detected"
+          description: "Dataset {{ $labels.dataset }} has not been updated for {{ $value | humanizeDuration }}"
+
+      # dbt Model Failure
+      - alert: DBTModelFailure
+        expr: dbt_model_status{status="fail"} == 1
+        for: 1m
+        labels:
+          severity: critical
+          service: dbt
+        annotations:
+          summary: "dbt model failure detected"
+          description: "dbt model {{ $labels.model_name }} has failed in project {{ $labels.project_name }}"
+
+      # dbt Test Failure
+      - alert: DBTTestFailure
+        expr: dbt_test_status{status="fail"} == 1
+        for: 1m
+        labels:
+          severity: warning
+          service: dbt
+        annotations:
+          summary: "dbt test failure detected"
+          description: "dbt test {{ $labels.test_name }} has failed for model {{ $labels.model_name }}"
+
+  - name: clinical-platform-database
+    rules:
+      # Database Connection Issues
+      - alert: DatabaseConnectionFailure
+        expr: db_connection_active == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: database
+        annotations:
+          summary: "Database connection failure"
+          description: "Unable to connect to database {{ $labels.database_name }}"
+
+      # Slow Query Detection
+      - alert: SlowQueries
+        expr: avg_over_time(db_query_duration_seconds[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+          service: database
+        annotations:
+          summary: "Slow database queries detected"
+          description: "Average query duration is {{ $value }}s for database {{ $labels.database_name }}"
+
+      # High Database Connections
+      - alert: HighDatabaseConnections
+        expr: db_connections_active > 50
+        for: 5m
+        labels:
+          severity: warning
+          service: database
+        annotations:
+          summary: "High number of database connections"
+          description: "{{ $value }} active connections to database {{ $labels.database_name }}"
+
+  - name: clinical-platform-ml
+    rules:
+      # ML Model Serving Issues
+      - alert: MLModelFailure
+        expr: ml_model_prediction_errors_total > 10
+        for: 5m
+        labels:
+          severity: warning
+          service: ml
+        annotations:
+          summary: "ML model prediction failures"
+          description: "{{ $value }} prediction failures for model {{ $labels.model_name }}"
+
+      # Model Drift Detection
+      - alert: MLModelDrift
+        expr: ml_model_accuracy < 0.8
+        for: 10m
+        labels:
+          severity: warning
+          service: ml
+        annotations:
+          summary: "ML model drift detected"
+          description: "Model {{ $labels.model_name }} accuracy has dropped to {{ $value }}"
+
+      # High Prediction Latency
+      - alert: MLHighPredictionLatency
+        expr: histogram_quantile(0.95, rate(ml_prediction_duration_seconds_bucket[5m])) > 5
+        for: 5m
+        labels:
+          severity: warning
+          service: ml
+        annotations:
+          summary: "High ML prediction latency"
+          description: "95th percentile prediction latency is {{ $value }}s for model {{ $labels.model_name }}"
+
+  - name: clinical-platform-security
+    rules:
+      # Authentication Failures
+      - alert: HighAuthenticationFailures
+        expr: rate(auth_failures_total[5m]) > 5
+        for: 2m
+        labels:
+          severity: warning
+          service: security
+        annotations:
+          summary: "High authentication failure rate"
+          description: "{{ $value }} authentication failures per second"
+
+      # Suspicious API Usage
+      - alert: SuspiciousAPIUsage
+        expr: rate(http_requests_total{status="403"}[5m]) > 1
+        for: 2m
+        labels:
+          severity: warning
+          service: security
+        annotations:
+          summary: "Suspicious API usage detected"
+          description: "High rate of 403 Forbidden responses: {{ $value }} per second"
+
+      # Rate Limit Exceeded
+      - alert: RateLimitExceeded
+        expr: rate(http_requests_total{status="429"}[5m]) > 0.1
+        for: 1m
+        labels:
+          severity: warning
+          service: security
+        annotations:
+          summary: "Rate limit exceeded"
+          description: "Rate limit exceeded with {{ $value }} requests per second being throttled"

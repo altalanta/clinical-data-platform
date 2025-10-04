@@ -1,0 +1,192 @@
+version: '3.8'
+
+services:
+  # Prometheus for metrics collection
+  prometheus:
+    image: prom/prometheus:v2.47.0
+    container_name: clinical-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/rules:/etc/prometheus/rules:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+      - '--web.enable-admin-api'
+      - '--storage.tsdb.retention.time=30d'
+    networks:
+      - observability
+    restart: unless-stopped
+    labels:
+      - "com.clinical-platform.service=prometheus"
+      - "com.clinical-platform.description=Metrics collection and storage"
+
+  # Grafana for visualization
+  grafana:
+    image: grafana/grafana:10.1.0
+    container_name: clinical-grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./grafana/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./grafana/config/grafana.ini:/etc/grafana/grafana.ini:ro
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin123
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource
+      - GF_FEATURE_TOGGLES_ENABLE=ngalert
+    networks:
+      - observability
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+    labels:
+      - "com.clinical-platform.service=grafana"
+      - "com.clinical-platform.description=Metrics visualization and dashboards"
+
+  # AlertManager for alerting
+  alertmanager:
+    image: prom/alertmanager:v0.26.0
+    container_name: clinical-alertmanager
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./prometheus/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager_data:/alertmanager
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+      - '--web.external-url=http://localhost:9093'
+    networks:
+      - observability
+    restart: unless-stopped
+    labels:
+      - "com.clinical-platform.service=alertmanager"
+      - "com.clinical-platform.description=Alert management and routing"
+
+  # Node Exporter for system metrics
+  node-exporter:
+    image: prom/node-exporter:v1.6.1
+    container_name: clinical-node-exporter
+    ports:
+      - "9100:9100"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.rootfs=/rootfs'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    networks:
+      - observability
+    restart: unless-stopped
+    labels:
+      - "com.clinical-platform.service=node-exporter"
+      - "com.clinical-platform.description=System metrics collection"
+
+  # Loki for log aggregation
+  loki:
+    image: grafana/loki:2.9.0
+    container_name: clinical-loki
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./loki/loki-config.yml:/etc/loki/local-config.yaml:ro
+      - loki_data:/loki
+    command: -config.file=/etc/loki/local-config.yaml
+    networks:
+      - observability
+    restart: unless-stopped
+    labels:
+      - "com.clinical-platform.service=loki"
+      - "com.clinical-platform.description=Log aggregation and storage"
+
+  # Promtail for log collection
+  promtail:
+    image: grafana/promtail:2.9.0
+    container_name: clinical-promtail
+    volumes:
+      - ./loki/promtail-config.yml:/etc/promtail/config.yml:ro
+      - /var/log:/var/log:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    command: -config.file=/etc/promtail/config.yml
+    networks:
+      - observability
+    restart: unless-stopped
+    depends_on:
+      - loki
+    labels:
+      - "com.clinical-platform.service=promtail"
+      - "com.clinical-platform.description=Log collection and forwarding"
+
+  # Jaeger for distributed tracing
+  jaeger:
+    image: jaegertracing/all-in-one:1.49
+    container_name: clinical-jaeger
+    ports:
+      - "14268:14268"   # jaeger-collector HTTP
+      - "16686:16686"   # jaeger-query UI
+      - "14250:14250"   # jaeger-collector gRPC
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    networks:
+      - observability
+    restart: unless-stopped
+    labels:
+      - "com.clinical-platform.service=jaeger"
+      - "com.clinical-platform.description=Distributed tracing"
+
+  # Clinical Data Platform API (example)
+  clinical-api:
+    build:
+      context: ../clinical-data-platform
+      dockerfile: Dockerfile
+    container_name: clinical-api
+    ports:
+      - "8000:8000"
+    environment:
+      - PROMETHEUS_METRICS_ENABLED=true
+      - JAEGER_AGENT_HOST=jaeger
+      - LOG_LEVEL=info
+      - READ_ONLY_MODE=1
+    volumes:
+      - ../demo_data:/app/data:ro
+    networks:
+      - observability
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+      - jaeger
+      - loki
+    labels:
+      - "com.clinical-platform.service=api"
+      - "com.clinical-platform.description=Clinical Data Platform API"
+
+networks:
+  observability:
+    driver: bridge
+    labels:
+      - "com.clinical-platform.network=observability"
+
+volumes:
+  prometheus_data:
+    labels:
+      - "com.clinical-platform.volume=prometheus-data"
+  grafana_data:
+    labels:
+      - "com.clinical-platform.volume=grafana-data"
+  alertmanager_data:
+    labels:
+      - "com.clinical-platform.volume=alertmanager-data"
+  loki_data:
+    labels:
+      - "com.clinical-platform.volume=loki-data"

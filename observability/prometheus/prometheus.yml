@@ -1,0 +1,86 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    monitor: 'clinical-data-platform'
+    environment: 'development'
+
+rule_files:
+  - "rules/*.yml"
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - alertmanager:9093
+
+scrape_configs:
+  # Prometheus itself
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+    scrape_interval: 5s
+    metrics_path: /metrics
+
+  # Clinical Data Platform API
+  - job_name: 'clinical-api'
+    static_configs:
+      - targets: ['clinical-api:8000']
+    scrape_interval: 10s
+    metrics_path: /metrics
+    scrape_timeout: 10s
+    honor_labels: true
+    params:
+      format: ['prometheus']
+
+  # Node Exporter (system metrics)
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['node-exporter:9100']
+    scrape_interval: 15s
+
+  # Grafana
+  - job_name: 'grafana'
+    static_configs:
+      - targets: ['grafana:3000']
+    scrape_interval: 30s
+    metrics_path: /metrics
+
+  # AlertManager
+  - job_name: 'alertmanager'
+    static_configs:
+      - targets: ['alertmanager:9093']
+    scrape_interval: 30s
+
+  # DuckDB metrics (if available)
+  - job_name: 'duckdb-exporter'
+    static_configs:
+      - targets: ['clinical-api:8001']  # Assuming custom exporter
+    scrape_interval: 30s
+    metrics_path: /db-metrics
+    scrape_timeout: 10s
+
+  # dbt metrics (if available)
+  - job_name: 'dbt-exporter'
+    static_configs:
+      - targets: ['clinical-api:8002']  # Assuming custom exporter
+    scrape_interval: 60s
+    metrics_path: /dbt-metrics
+    scrape_timeout: 30s
+
+  # Application-specific service discovery
+  - job_name: 'clinical-services'
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        port: 8000
+    relabel_configs:
+      - source_labels: [__meta_docker_container_label_com_clinical_platform_service]
+        target_label: service
+      - source_labels: [__meta_docker_container_label_com_clinical_platform_description]
+        target_label: description
+      - source_labels: [__meta_docker_container_name]
+        target_label: container
+      # Only scrape containers with the clinical-platform service label
+      - source_labels: [__meta_docker_container_label_com_clinical_platform_service]
+        action: keep
+        regex: .+
