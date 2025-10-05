@@ -35,12 +35,12 @@ nav:
   - Home: index.md
   - Getting Started: getting-started.md
   - Architecture: architecture.md
-  - Data Flow: data-flow.md
+  - API: api.md
+  - Data Warehouse: data_warehouse.md
   - Validation: validation.md
-  - API Reference: api.md
-  - dbt Documentation: dbt.md
+  - Model Evaluation: model_evaluation.md
+  - Model Card: model_card.md
   - Demo Artifacts: demo-artifacts.md
-  - Data Card: data_card.md
 
 markdown_extensions:
   - admonition

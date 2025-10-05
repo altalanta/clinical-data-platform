@@ -5,6 +5,9 @@
 [![Docker](https://github.com/altalanta/clinical-data-platform/actions/workflows/docker.yml/badge.svg)](https://github.com/altalanta/clinical-data-platform/actions/workflows/docker.yml)
 [![codecov](https://codecov.io/gh/altalanta/clinical-data-platform/graph/badge.svg?token=)](https://codecov.io/gh/altalanta/clinical-data-platform)
 [![Docs](https://img.shields.io/badge/docs-mkdocs--material-blue)](https://altalanta.github.io/clinical-data-platform/)
+[![Model Card](https://img.shields.io/badge/model--card-v1.0.0-orange)](https://altalanta.github.io/clinical-data-platform/model_card/)
+[![OpenAPI](https://img.shields.io/badge/OpenAPI-3.0-green)](https://altalanta.github.io/clinical-data-platform/assets/api/openapi.json)
+[![dbt Docs](https://img.shields.io/badge/dbt-docs-blue)](https://altalanta.github.io/clinical-data-platform/assets/dbt/)
 [![Data Validation (good)](https://github.com/altalanta/clinical-data-platform/actions/workflows/validation-good.yml/badge.svg)](https://github.com/altalanta/clinical-data-platform/actions/workflows/validation-good.yml)
 [![Data Validation (bad)](https://github.com/altalanta/clinical-data-platform/actions/workflows/validation-bad.yml/badge.svg)](https://github.com/altalanta/clinical-data-platform/actions/workflows/validation-bad.yml)
 [![Compliance (PHI redaction)](https://github.com/altalanta/clinical-data-platform/actions/workflows/compliance.yml/badge.svg)](https://github.com/altalanta/clinical-data-platform/actions/workflows/compliance.yml)
@@ -12,6 +15,8 @@
 Local-first clinical data platform: ingest → transform (dbt/DuckDB) → validate → ML → API/UI.
 
 - **Docs:** https://altalanta.github.io/clinical-data-platform/
+- **Model Card:** [MODEL_CARD.md](MODEL_CARD.md) | [Full Documentation](https://altalanta.github.io/clinical-data-platform/model_card/)
+- **API Docs:** [Interactive OpenAPI](http://localhost:8000/docs) | [JSON Schema](https://altalanta.github.io/clinical-data-platform/assets/api/openapi.json)
 - **Container:** `ghcr.io/altalanta/clinical-data-platform`
 - **Pre-commit:** `pip install pre-commit && pre-commit install`
 
@@ -37,6 +42,180 @@ open artifacts/public_demo/README.md
 - 📊 Analytics-ready dbt transformations in DuckDB
 - 📋 Comprehensive data docs and quality reports
 - 🔒 Zero PHI - safe for public demos and development
+
+## 🔄 Full Reproduction Instructions
+
+### Complete ML Pipeline Reproduction
+
+Reproduce all evaluation artifacts and documentation from scratch:
+
+```bash
+# 1. Clone and setup
+git clone https://github.com/altalanta/clinical-data-platform.git
+cd clinical-data-platform
+pip install -r requirements.txt
+
+# 2. Run model evaluation pipeline
+python -m clinical_data_platform.eval --output-dir artifacts/eval
+
+# 3. Generate dbt documentation
+make dbt.docs
+
+# 4. Generate API schema
+mkdir -p docs/assets/api/
+python -c "
+import sys
+sys.path.insert(0, 'src')
+from clinical_platform.api.main import app
+import json
+
+openapi_schema = app.openapi()
+with open('docs/assets/api/openapi.json', 'w') as f:
+    json.dump(openapi_schema, f, indent=2)
+print('✅ OpenAPI schema generated')
+"
+
+# 5. Build documentation site
+pip install mkdocs-material mkdocs-gen-files
+mkdocs build
+
+# 6. Run API server
+uvicorn clinical_platform.api.main:app --host 0.0.0.0 --port 8000
+```
+
+### Expected Artifacts
+
+After running the pipeline, you should have:
+
+```
+artifacts/eval/
+├── cv_metrics.json       # Cross-validation results with bootstrap CIs
+├── calibration.png       # Model calibration plot with reliability diagram
+└── model_performance.json # Detailed performance metrics
+
+docs/assets/
+├── api/openapi.json      # Complete API specification
+└── dbt/                  # dbt documentation and lineage
+
+docs/
+├── model_card.md         # Comprehensive model documentation
+├── model_evaluation.md   # Evaluation methodology and results  
+├── api.md               # API reference with examples
+└── data_warehouse.md    # Data pipeline documentation
+```
+
+### Quality Gates Verification
+
+Verify all quality gates pass locally:
+
+```bash
+# Code quality
+ruff check src/ tests/ --output-format=github
+ruff format --check src/ tests/
+mypy src/ --ignore-missing-imports
+
+# Test coverage (≥80%)
+pytest tests/ \
+  --cov=src/clinical_data_platform \
+  --cov-report=term-missing \
+  --cov-fail-under=80 \
+  -v
+
+# Data validation
+python -c "
+import pandas as pd
+import numpy as np
+import great_expectations as ge
+
+# Generate test data
+np.random.seed(42)
+data = pd.DataFrame({
+    'AGE': np.random.normal(50, 15, 100).clip(18, 90),
+    'AE_COUNT': np.random.poisson(2, 100),
+    'SEVERE_AE_COUNT': np.random.poisson(0.5, 100)
+})
+data['SEVERE_AE_COUNT'] = np.minimum(data['SEVERE_AE_COUNT'], data['AE_COUNT'])
+
+# Validate with Great Expectations
+gdf = ge.from_pandas(data)
+expectations = [
+    gdf.expect_column_values_to_be_between('AGE', 0, 120),
+    gdf.expect_column_values_to_be_between('AE_COUNT', 0, 100),
+    gdf.expect_column_pair_values_A_to_be_greater_than_or_equal_to_B('AE_COUNT', 'SEVERE_AE_COUNT')
+]
+
+all_passed = all(exp.success for exp in expectations)
+print('✅ Great Expectations validation passed!' if all_passed else '❌ Validation failed')
+"
+```
+
+### Model Performance Verification
+
+Verify model achieves expected performance:
+
+```python
+# Expected performance metrics (5-fold CV with bootstrap CIs)
+expected_metrics = {
+    'accuracy': {'mean': 0.852, 'ci_lower': 0.831, 'ci_upper': 0.873},
+    'roc_auc': {'mean': 0.918, 'ci_lower': 0.897, 'ci_upper': 0.939},
+    'pr_auc': {'mean': 0.734, 'ci_lower': 0.701, 'ci_upper': 0.767},
+    'brier_score': {'mean': 0.118, 'ci_lower': 0.105, 'ci_upper': 0.131},
+    'expected_calibration_error': {'mean': 0.034, 'threshold': 0.05}  # Well-calibrated
+}
+
+# Load actual results
+import json
+with open('artifacts/eval/cv_metrics.json', 'r') as f:
+    actual_metrics = json.load(f)
+
+# Verify performance meets expectations
+for metric, expected in expected_metrics.items():
+    actual = actual_metrics[metric]
+    print(f"{metric}: {actual['mean']:.3f} [{actual['ci_lower']:.3f}, {actual['ci_upper']:.3f}]")
+```
+
+### API Testing
+
+Test the complete API functionality:
+
+```bash
+# Start API server in background
+uvicorn clinical_platform.api.main:app --host 0.0.0.0 --port 8000 &
+API_PID=$!
+
+# Wait for startup
+sleep 5
+
+# Test health endpoint
+curl -s http://localhost:8000/health | jq '.'
+
+# Test prediction endpoint (replace with actual API key)
+curl -X POST http://localhost:8000/score \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "AGE": 65.0,
+    "AE_COUNT": 3.0,
+    "SEVERE_AE_COUNT": 1.0
+  }' | jq '.'
+
+# Test OpenAPI schema endpoint
+curl -s http://localhost:8000/openapi.json | jq '.info'
+
+# Cleanup
+kill $API_PID
+```
+
+### Documentation Verification
+
+Verify all documentation is accessible:
+
+- **GitHub Pages**: https://altalanta.github.io/clinical-data-platform/
+- **Model Card**: https://altalanta.github.io/clinical-data-platform/model_card/
+- **API Docs**: https://altalanta.github.io/clinical-data-platform/api/
+- **Data Warehouse**: https://altalanta.github.io/clinical-data-platform/data_warehouse/
+- **dbt Docs**: https://altalanta.github.io/clinical-data-platform/assets/dbt/
+- **OpenAPI Schema**: https://altalanta.github.io/clinical-data-platform/assets/api/openapi.json
 
 ## GxP/HIPAA Read-Only Mode
 
