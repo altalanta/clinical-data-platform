@@ -1,0 +1,64 @@
+version: 2
+
+models:
+  - name: int_index_dates
+    description: Patient-level index date selection combining inpatient encounters and high-risk diagnoses.
+    columns:
+      - name: patient_id
+        description: Synthetic patient identifier.
+        tests:
+          - unique
+          - not_null
+      - name: index_date
+        description: Chosen index date for cohort construction.
+        tests:
+          - not_null
+      - name: age_at_index
+        description: Age in whole years at index date.
+  - name: int_visit_windows
+    description: Encounter aggregates within lookback and follow-up windows around index.
+    columns:
+      - name: patient_id
+        description: Synthetic patient identifier.
+        tests:
+          - unique
+          - not_null
+      - name: lookback_encounters
+        description: Count of encounters in the 365 day lookback window.
+      - name: followup_30d_encounters
+        description: Count of encounters in the 30 days post index.
+  - name: int_lab_latest
+    description: Most recent lab value per category within the 365 day lookback window.
+    columns:
+      - name: patient_id
+        description: Synthetic patient identifier.
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('int_index_dates')
+                field: patient_id
+      - name: lab_category
+        description: Harmonized lab category derived from seed mapping.
+        tests:
+          - not_null
+      - name: result_ts
+        description: Timestamp of most recent observation within the lookback window.
+  - name: int_dx_flags
+    description: Wide diagnosis indicator set covering key comorbidities.
+    columns:
+      - name: patient_id
+        description: Synthetic patient identifier.
+        tests:
+          - unique
+          - not_null
+      - name: flag_prior_mi
+        description: Indicator for history of myocardial infarction in lookback window.
+  - name: int_proc_flags
+    description: Wide procedure indicator set summarizing notable utilization events.
+    columns:
+      - name: patient_id
+        description: Synthetic patient identifier.
+        tests:
+          - unique
+          - not_null

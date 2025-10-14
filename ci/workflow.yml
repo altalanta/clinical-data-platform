@@ -1,0 +1,48 @@
+name: clinical-platform-ci
+
+on:
+  push:
+    branches: ["main", "master"]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Cache pip
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: |
+          make env
+
+      - name: Configure dbt profiles
+        run: |
+          make dbt-init
+
+      - name: Run pipeline
+        run: |
+          make all
+
+      - name: Upload dbt docs artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: dbt-docs
+          path: |
+            target/catalog.json
+            target/manifest.json
+            target/index.html

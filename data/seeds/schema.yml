@@ -1,0 +1,17 @@
+version: 2
+
+seeds:
+  - name: icd10_to_ccs
+    description: Mapping between ICD-10 codes and CCS groupings with risk tiers.
+    columns:
+      - name: icd10_code
+        tests:
+          - unique
+          - not_null
+  - name: loinc_to_lab_category
+    description: Mapping between LOINC codes and lab categories with normal ranges.
+    columns:
+      - name: loinc_code
+        tests:
+          - unique
+          - not_null

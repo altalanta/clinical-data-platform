@@ -1,0 +1,11 @@
+clinical_platform:
+  outputs:
+    dev:
+      type: duckdb
+      path: ./clinical.duckdb
+      threads: 1
+      settings:
+        memory_limit: "8GB"
+        home_directory: "./.duckdb/home"
+        preserve_insertion_order: false
+  target: dev

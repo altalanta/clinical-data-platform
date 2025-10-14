@@ -1,0 +1,9 @@
+icd10_code,ccs_category,ccs_label,risk_tier
+I21.9,109,Acute myocardial infarction,high
+I10,98,Essential hypertension,baseline
+E11.9,49,Type 2 diabetes mellitus,high
+C34.90,19,Lung cancer,high
+C50.919,24,Breast cancer,moderate
+N18.3,156,Chronic kidney disease stage 3,high
+F17.210,657,Nicotine dependence,lifestyle
+E78.5,53,Hyperlipidemia,baseline
