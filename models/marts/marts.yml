@@ -1,0 +1,73 @@
+version: 2
+
+models:
+  - name: dim_patient
+    description: Patient dimension with harmonized demographics and index metadata.
+    columns:
+      - name: patient_id
+        description: Synthetic patient identifier.
+        tests:
+          - unique
+          - not_null
+      - name: age_at_index
+        description: Age at index in whole years.
+  - name: fct_cohort
+    description: Cohort fact table capturing inclusion criteria and utilization metrics.
+    columns:
+      - name: patient_id
+        description: Synthetic patient identifier.
+        tests:
+          - unique
+          - not_null
+      - name: include_flag
+        description: Flag indicating whether the patient satisfied all inclusion checks.
+        tests:
+          - accepted_values:
+              arguments:
+                values: [0, 1]
+  - name: fct_features
+    description: Engineered features at index synthesizing comorbidity, utilization, and labs.
+    columns:
+      - name: patient_id
+        description: Synthetic patient identifier.
+        tests:
+          - unique
+          - not_null
+      - name: comorbidity_score
+        description: Count of positive comorbidity indicators.
+  - name: mart_survival_labels
+    description: Survival labels with death events and censoring at 365 days.
+    columns:
+      - name: patient_id
+        description: Synthetic patient identifier.
+        tests:
+          - unique
+          - not_null
+      - name: event
+        description: Indicator for death within 365 days post index.
+        tests:
+          - accepted_values:
+              arguments:
+                values: [0, 1]
+  - name: mart_survival_features
+    description: Survival-ready feature set joining engineered features with survival labels.
+    columns:
+      - name: patient_id
+        description: Synthetic patient identifier.
+        tests:
+          - unique
+          - not_null
+      - name: event
+        description: Indicator for death within 365 days.
+
+exposures:
+  - name: survival_model_input
+    type: analysis
+    maturity: high
+    owner:
+      name: Clinical Platform Team
+      email: analytics@example.com
+    description: Feature table powering survival modeling pipelines for 365-day mortality.
+    depends_on:
+      - ref('mart_survival_features')
+    url: https://example.com/survival-model

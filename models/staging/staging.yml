@@ -1,0 +1,163 @@
+version: 2
+
+models:
+  - name: stg_patients
+    description: Cleaned patient demographics with harmonized categorical values.
+    columns:
+      - name: patient_id
+        description: Unique identifier for each synthetic patient.
+        tests:
+          - unique
+          - not_null
+      - name: sex
+        description: Binary sex recorded at registration.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["F", "M"]
+      - name: birth_date
+        description: Date of birth.
+        tests:
+          - not_null
+      - name: race
+        description: Self-reported race bucket.
+        tests:
+          - accepted_values:
+              arguments:
+                values:
+                - White
+                - Black
+                - Asian
+                - American Indian/Alaska Native
+                - Native Hawaiian/Pacific Islander
+      - name: ethnicity
+        description: Hispanic or Latino ethnicity indicator.
+        tests:
+          - accepted_values:
+              arguments:
+                values:
+                - Hispanic or Latino
+                - Not Hispanic or Latino
+      - name: index_site
+        description: Synthetic three-site network code.
+        tests:
+          - accepted_values:
+              arguments:
+                values: ["A", "B", "C"]
+
+  - name: stg_encounters
+    description: Encounter facts with normalized timestamps and encounter types.
+    columns:
+      - name: encounter_id
+        description: Unique encounter identifier.
+        tests:
+          - unique
+          - not_null
+      - name: patient_id
+        description: Foreign key to stg_patients.
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_patients')
+                field: patient_id
+      - name: encounter_type
+        description: Normalized encounter type (inpatient, outpatient, emergency).
+        tests:
+          - accepted_values:
+              arguments:
+                values: ["INPT", "OUTPT", "ED"]
+      - name: admit_ts
+        description: Encounter start timestamp.
+        tests:
+          - not_null
+      - name: discharge_ts
+        description: Encounter discharge timestamp.
+
+  - name: stg_diagnoses
+    description: ICD-10 diagnosis codes linked to encounters.
+    columns:
+      - name: encounter_id
+        description: Encounter the diagnosis belongs to.
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_encounters')
+                field: encounter_id
+      - name: patient_id
+        description: Patient receiving the diagnosis.
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_patients')
+                field: patient_id
+      - name: diagnosis_code
+        description: ICD-10-CM code.
+        tests:
+          - not_null
+
+  - name: stg_procedures
+    description: CPT/HCPCS procedure codes linked to encounters.
+    columns:
+      - name: encounter_id
+        description: Encounter the procedure belongs to.
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_encounters')
+                field: encounter_id
+      - name: patient_id
+        description: Patient receiving the procedure.
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_patients')
+                field: patient_id
+      - name: procedure_code
+        description: CPT/HCPCS procedure code.
+        tests:
+          - not_null
+
+  - name: stg_labs
+    description: Laboratory observations with units and timestamps.
+    columns:
+      - name: lab_id
+        description: Unique identifier for each lab result.
+        tests:
+          - unique
+          - not_null
+      - name: patient_id
+        description: Patient associated with the lab.
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_patients')
+                field: patient_id
+      - name: loinc_code
+        description: LOINC code for the test performed.
+        tests:
+          - not_null
+      - name: result_ts
+        description: Timestamp when the lab result was recorded.
+        tests:
+          - not_null
+
+  - name: stg_death
+    description: Death registry records including timestamp of death.
+    columns:
+      - name: patient_id
+        description: Patient identifier.
+        tests:
+          - unique
+          - relationships:
+              arguments:
+                to: ref('stg_patients')
+                field: patient_id
+      - name: death_ts
+        description: Timestamp of confirmed death.
